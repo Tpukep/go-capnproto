@@ -1,6 +1,8 @@
+@0x98fdac38d7ead859;
+
 using Go = import "go.capnp";
 
-annotation field(field) :Text;
-annotation omitempty(field) :Void;
-
 $Go.package("capn");
+
+annotation required(field) :Text;
+annotation optional(field) :Text;

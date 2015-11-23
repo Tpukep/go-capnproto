@@ -3,8 +3,9 @@ package main
 // AUTO GENERATED - DO NOT EDIT
 
 import (
-	C "github.com/glycerine/go-capnproto"
 	"math"
+
+	C "github.com/tpukep/go-capnproto"
 )
 
 const (
