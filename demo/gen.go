@@ -1,6 +1,6 @@
-//go:generate capnp compile -ogo const.capnp
-//go:generate capnp compile -ogo structs.capnp
-//go:generate capnp compile -ogo interfaces.capnp
-//go:generate capnp compile -ogo annotations.capnp
+//go:generate capnp compile -opgo const.capnp
+//go:generate capnp compile -opgo structs.capnp
+//go:generate capnp compile -opgo interfaces.capnp
+//go:generate capnp compile -opgo annotations.capnp
 
 package demo

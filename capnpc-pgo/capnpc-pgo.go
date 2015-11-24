@@ -3,6 +3,7 @@ package main
 import (
 	"bytes"
 	"fmt"
+	"go/format"
 	"io"
 	"log"
 	"os"
@@ -14,10 +15,9 @@ import (
 )
 
 var (
-	go_capnproto_import = "github.com/tpukep/go-capnproto"
-	fprintf             = fmt.Fprintf
-	sprintf             = fmt.Sprintf
-	title               = strings.Title
+	fprintf = fmt.Fprintf
+	sprintf = fmt.Sprintf
+	title   = strings.Title
 )
 
 var g_nodes = make(map[uint64]*node)
@@ -460,7 +460,6 @@ func (n *node) writeValue(w io.Writer, t Type, v Value) {
 			fprintf(w, "}")
 
 		case TYPE_DATA:
-			log.Println("List data")
 			fprintf(w, "[]byte{")
 			for i, b := range v.List().ToDataList().ToArray() {
 				if i > 0 {
@@ -575,11 +574,9 @@ func (n *node) defineField(w io.Writer, f Field) {
 
 	var g, s bytes.Buffer
 
-	settag := ""
 	if f.DiscriminantValue() != 0xFFFF {
-		settag = sprintf(" C.Struct(s).Set16(%d, %d);", n.Struct().DiscriminantOffset()*2, f.DiscriminantValue())
 		if t.Which() == TYPE_VOID {
-			fprintf(&s, "func (s %s) Set%s() {%s }\n", n.name, fname, settag)
+			fprintf(&s, "/* Not implemented */")
 			w.Write(s.Bytes())
 			return
 		}
@@ -765,7 +762,7 @@ func (n *node) defineStructTypes(w io.Writer, baseNode *node) {
 	if baseNode == nil {
 		fprintf(w, "type %s struct {\n", n.name)
 		n.defineStructFields(w)
-		fprintf(w, "}\n")
+		fprintf(w, "}\n\n")
 
 		baseNode = n
 	}
@@ -987,10 +984,8 @@ func main() {
 			if v := a.Value(); v.Which() == VALUE_TEXT {
 				switch a.Id() {
 				case C.Package:
-					log.Println("Package annotation:", v.Text())
 					f.pkg = v.Text()
 				case C.Import:
-					log.Println("Import annotation:", v.Text())
 					f.imp = v.Text()
 				}
 			}
@@ -1010,13 +1005,6 @@ func main() {
 		g_segment = C.NewBuffer([]byte{})
 		g_bufname = sprintf("x_%x", f.Id())
 
-		// for _, n := range f.nodes {
-		// 	if n.Which() == NODE_ANNOTATION {
-		// 		log.Println("Requested files annotation:", n)
-		// 		n.defineAnnotation(&buf)
-		// 	}
-		// }
-
 		defineConstNodes(&buf, f.nodes)
 
 		for _, n := range f.nodes {
@@ -1025,12 +1013,10 @@ func main() {
 				log.Println("Node annotation:", n)
 			case NODE_ENUM:
 				n.defineEnum(&buf)
-				// n.defineTypeJsonFuncs(&buf)
 			case NODE_STRUCT:
 				if !n.Struct().IsGroup() {
 					n.defineStructTypes(&buf, nil)
 					n.defineStructEnums(&buf)
-					// n.defineTypeJsonFuncs(&buf)
 				}
 			}
 		}
@@ -1065,11 +1051,9 @@ func main() {
 		}
 
 		// Format sources
-		// clean, err := format.Source(buf.Bytes())
-		// assert(err == nil, "%v\n", err)
-		// file.Write(clean)
-
-		file.Write(buf.Bytes())
+		clean, err := format.Source(buf.Bytes())
+		assert(err == nil, "%v\n", err)
+		file.Write(clean)
 	}
 }
 
@@ -1078,8 +1062,8 @@ func processAnnotations(w io.Writer, t Type_Which, ans Annotation_List) {
 
 	for i, a := range ans.ToArray() {
 		switch t {
-		case TYPE_INT8, TYPE_UINT8, TYPE_INT16, TYPE_UINT16, TYPE_INT32, TYPE_UINT32, TYPE_INT64, TYPE_UINT64, TYPE_FLOAT32, TYPE_FLOAT64:
-			// Numbers
+		case TYPE_INT8, TYPE_UINT8, TYPE_INT16, TYPE_UINT16, TYPE_INT32,
+			TYPE_UINT32, TYPE_INT64, TYPE_UINT64, TYPE_FLOAT32, TYPE_FLOAT64:
 			switch a.Id() {
 			case C.Multof:
 				fprintf(w, "multof:\"%s\"", a.Value().Int32())
@@ -1090,7 +1074,6 @@ func processAnnotations(w io.Writer, t Type_Which, ans Annotation_List) {
 			}
 
 		case TYPE_TEXT:
-			// Text
 			switch a.Id() {
 			case C.Format:
 				fprintf(w, "format:\"%s\"", a.Value().Text())
@@ -1103,7 +1086,6 @@ func processAnnotations(w io.Writer, t Type_Which, ans Annotation_List) {
 			}
 
 		case TYPE_LIST:
-			// List types
 			switch a.Id() {
 			case C.Unique:
 				fprintf(w, "unique:\"true\"")

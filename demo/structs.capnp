@@ -17,7 +17,7 @@ struct Book {
 	}
 }
 
-struct Person $Go.doc("Some Person") {
+struct Person {
 	name @0 :Text;
 	email @1 :Text;
 	age @2 :UInt8;
