@@ -1029,7 +1029,9 @@ func main() {
 		}
 
 		// Create output file
-		file, err := os.Create(reqf.Filename() + ".go")
+		filename := strings.TrimSuffix(reqf.Filename(), ".capnp")
+
+		file, err := os.Create(filename + ".go")
 		assert(err == nil, "%v\n", err)
 		defer file.Close()
 

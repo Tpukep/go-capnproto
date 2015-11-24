@@ -1,55 +1,71 @@
-Version 1.0 vs 2.0
--------
+Plain Go code generator for [Capnproto](https://capnproto.org) definitions.
 
-Update 2015 Sept 20:
+# HOW TO
 
-Big news! Version 2.0 of the go-bindings, authored by Ross Light, is now released and newly available! It features capnproto RPC and capabilities support. See https://github.com/zombiezen/go-capnproto2 for the v2 code and docs.
+1. Install
 
-This repository (https://github.com/glycerine/go-capnproto) is now being called version 1.0 of the go bindings for capnproto. It does not have RPC (it was created before the RPC protocol was defined). Version 1 has schema generating tools such as https://github.com/glycerine/bambam. Personally I have many projects that use v1 with mangos for network transport; https://github.com/gdamore/mangos. Here is an example of using them together: https://github.com/glycerine/goq. Nonetheless, for new projects, especially once v2 has been hardened and tested, v2 should be preferred.
+- Install capnp tool
 
-Version 1 will be maintained for applications that currently use it.  However new users, new features and new code contributions should be directed to the version 2 code base to take advantage of the RPC and capabilities.
+- Install capnp plugins
 
+```
+go get github.com/glycerine/bambam
+go get github.com/glycerine/go-capnproto
+go get github.com/tpukep/go-capnproto
+```
 
-License
--------
+Copy go.capnp from glycerine/go-capnproto
 
-MIT - see LICENSE file
+```sh
+cp glycerine/go-capnproto/go.capnp /usr/local/include
+```
 
-Documentation
--------------
-In godoc see http://godoc.org/github.com/glycerine/go-capnproto
+2. Write Capn'proto schema
 
+`model.capnp`:
+```
+@0xad8d3cbc6db52a1d;
 
-News
-----
+using Go = import "/go.capnp";
+$Go.package("model");
 
-5 April 2014: James McKaskill, the author of go-capnproto (https://github.com/jmckaskill/go-capnproto), 
-has been super busy of late, so I agreed to take over as maintainer. This branch 
-(https://github.com/glycerine/go-capnproto) includes my recent work to fix bugs in the
-creation (originating) of structs for Go, and an implementation of the packing/unpacking capnp specification.
-Thanks to Albert Strasheim (https://github.com/alberts/go-capnproto) of CloudFlare for a great set of packing tests. - Jason
+struct Book {
+   title      @0:   Text;
+   pageCount  @1:   Int32;
+   authors    @2:   List(Text);
+   content    @3:   Text;
+}
+```
 
-Getting started
----------------
+3. Generate Go plain code
 
-New! Visit the sibling project to this one, [bambam](https://github.com/glycerine/bambam), to automagically generate a capnproto schema from the struct definitions in your go source files. Bambam makes it easy to get starting with go-capnproto.
+```sh
+capnp compile -opgo model.capnp
+```
 
-pre-requisite: Due to the use of the customtype annotation feature, you will need a relatively recent capnproto installation.  At or after 1 July 2014 (at or after b2d752beac5436bada2712f1a23185b78063e6fa) is known to work.
+4. Generate translation code
 
-~~~
-# first: be sure you have your GOPATH env variable setup.
-$ go get -u -t github.com/glycerine/go-capnproto
-$ cd $GOPATH/src/github.com/glycerine/go-capnproto
-$ make # will install capnpc-go and compile the test schema aircraftlib/aircraft.capnp, which is used in the tests.
-$ diff ./capnpc-go/capnpc-go `which capnpc-go` # you should verify that you are using the capnpc-go binary you just built. There should be no diff. Adjust your PATH if necessary to include the binary capnpc-go that you just built/installed from ./capnpc-go/capnpc-go.
-$ go test -v  # confirm all tests are green
-~~~
+```sh
+bambam -o . -p model model.go
+```
 
-What is Cap'n Proto?
---------------------
+5. Generate Cap'n proto code
 
-The best cerealization...
+Modify `schema.capnp`
 
-http://kentonv.github.io/capnproto/
+Replace:
+```
+using Go = import "go.capnp";
+```
 
+With:
+```
+using Go = import "/go.capnp";
+```
+
+Generate
+
+```sh
+capnp compile -ogo schema.capnp
+```
 
