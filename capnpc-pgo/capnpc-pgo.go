@@ -11,7 +11,10 @@ import (
 	"strconv"
 	"strings"
 
-	C "github.com/tpukep/go-capnproto"
+	C "github.com/glycerine/go-capnproto"
+	"github.com/tpukep/go-capnproto/check"
+	"github.com/tpukep/go-capnproto/jsontag"
+	"github.com/tpukep/go-capnproto/msgptag"
 )
 
 var (
@@ -1067,42 +1070,44 @@ func processAnnotations(w io.Writer, t Type_Which, ans Annotation_List) {
 		case TYPE_INT8, TYPE_UINT8, TYPE_INT16, TYPE_UINT16, TYPE_INT32,
 			TYPE_UINT32, TYPE_INT64, TYPE_UINT64, TYPE_FLOAT32, TYPE_FLOAT64:
 			switch a.Id() {
-			case C.Multof:
+			case check.Multof:
 				fprintf(w, "multof:\"%s\"", a.Value().Int32())
-			case C.Min:
+			case check.Min:
 				fprintf(w, "min:\"%s\"", a.Value().Int64())
-			case C.Max:
+			case check.Max:
 				fprintf(w, "max:\"%d\"", a.Value().Int64())
 			}
 
 		case TYPE_TEXT:
 			switch a.Id() {
-			case C.Format:
+			case check.Format:
 				fprintf(w, "format:\"%s\"", a.Value().Text())
-			case C.Pattern:
+			case check.Pattern:
 				fprintf(w, "pattern:\"%s\"", a.Value().Text())
-			case C.Minlen:
+			case check.Minlen:
 				fprintf(w, "minlen:\"%d\"", a.Value().Int32())
-			case C.Maxlen:
+			case check.Maxlen:
 				fprintf(w, "maxlen:\"%d\"", a.Value().Int32())
 			}
 
 		case TYPE_LIST:
 			switch a.Id() {
-			case C.Unique:
+			case check.Unique:
 				fprintf(w, "unique:\"true\"")
-			case C.Minlen:
+			case check.Minlen:
 				fprintf(w, "minlen:\"%d\"", a.Value().Int32())
-			case C.Maxlen:
+			case check.Maxlen:
 				fprintf(w, "maxlen:\"%d\"", a.Value().Int32())
 			}
 		}
 
 		switch a.Id() {
-		case C.Required:
+		case jsontag.Required:
 			fprintf(w, "json:\"%s\"", a.Value().Text())
-		case C.Optional:
+		case jsontag.Optional:
 			fprintf(w, "json:\"%s,omitempty\"", a.Value().Text())
+		case msgptag.Field:
+			fprintf(w, "msgp:\"%s\"", a.Value().Text())
 		}
 
 		if i != ans.Len()-1 {
