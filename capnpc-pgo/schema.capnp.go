@@ -5,7 +5,7 @@ package main
 import (
 	"math"
 
-	C "github.com/tpukep/go-capnproto"
+	C "github.com/glycerine/go-capnproto"
 )
 
 const (

@@ -1,8 +1,9 @@
 @0xeac197c12d74cbbb;
 
-using Go = import "../go.capnp";
-using Check = import "../check.capnp";
-using Json = import "../json.capnp";
+using Go = import "/go.capnp";
+using Check = import "../check/check.capnp";
+using Json = import "../jsontag/json.capnp";
+using Msgp = import "../msgptag/msgp.capnp";
 
 $Go.package("demo");
 
@@ -15,7 +16,7 @@ struct Person $Go.doc("Some Person") {
 
 struct Book {
 	title @0 :Text $Json.required("title"); # Title of the book.
-	pageCount @1 :Int32 $Json.required("page_count"); # Number of pages in the book.
+	pageCount @1 :Int32 $Json.required("page_count") $Msgp.field("-"); # Number of pages in the book.
 	authors @2 :List(Person) $Json.optional("authors"); # Authors of the book	
 	content @3 :Text $Check.maxlen(256) $Json.required("content"); # Book content
 }
