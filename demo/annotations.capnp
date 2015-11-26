@@ -1,6 +1,6 @@
 @0xeac197c12d74cbbb;
 
-using Go = import "../go.capnp";
+using Go = import "/go.capnp";
 using Check = import "../check.capnp";
 using Json = import "../json.capnp";
 
