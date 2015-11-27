@@ -1,0 +1,77 @@
+package main
+
+import (
+	"fmt"
+	"os"
+	"reflect"
+    "bytes"
+	"github.com/glycerine/go-goon"
+)
+
+// used in rw_test.go for round-trip testing write/read
+
+type Nester1 struct {
+  Strs []string
+}
+
+type Nester2 struct {
+     N1     []Nester1
+}
+
+type Ptr1 struct {
+  Strs []string
+}
+
+type Ptr2 struct {
+     P1  []*Ptr1
+}
+
+type RWTest struct {
+	Hello    []string
+	World    []int
+	SixFour  []int64
+	Floaters []float64
+
+    N2 []Nester2
+    P2 []*Ptr2
+
+    Matrix [][]int
+    NestMatrix [][]Nester1
+}
+
+func main() {
+
+	thing1 := "thing1"
+	thing2 := "thing2"
+
+	rw := RWTest{
+		Hello:    []string{"one", "two", "three"},
+		World:    []int{1, 2, 3},
+		SixFour:  []int64{6, 5, 4},
+		Floaters: []float64{1.5, 4.5},
+		N2:       []Nester2{Nester2{N1: []Nester1{Nester1{Strs: []string{"hey", "joe"}}}}},
+		P2:       []*Ptr2{&Ptr2{P1: []*Ptr1{&Ptr1{Strs: []string{thing1, thing2}}}}},
+        Matrix:   [][]int{[]int{1,2},[]int{3,4}},
+        NestMatrix: [][]Nester1{[]Nester1{Nester1{Strs:[]string{"z","w"}},Nester1{Strs:[]string{"q","r"}}},[]Nester1{Nester1{Strs:[]string{"zebra","wally"}},Nester1{Strs:[]string{"qubert","rocks"}}}},
+	}
+
+	var o bytes.Buffer
+	rw.Save(&o)
+
+    rw2 := &RWTest{}
+	rw2.Load(&o)
+
+	if !reflect.DeepEqual(&rw, rw2) {
+		fmt.Printf("rw and rw2 were not equal!\n")
+
+		fmt.Printf("\n\n =============  rw: ====\n")
+		goon.Dump(rw)
+		fmt.Printf("\n\n =============  rw2: ====\n")
+		goon.Dump(rw2)
+		fmt.Printf("\n\n ================\n")
+
+		os.Exit(1)
+	}
+
+	fmt.Printf("Load() data matched Saved() data.\n")
+}
