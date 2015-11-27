@@ -17,6 +17,11 @@ import (
 	T "github.com/tpukep/go-capnproto"
 )
 
+const STD_IMPORTS = `import (
+    capn "github.com/glycerine/go-capnproto"
+    "io"
+`
+
 var (
 	fprintf = fmt.Fprintf
 	sprintf = fmt.Sprintf
@@ -1041,6 +1046,20 @@ func processAnnotations(w io.Writer, t Type_Which, ans Annotation_List) {
 	}
 }
 
+func writeImports(file *os.File, f *node) {
+	fprintf(file, STD_IMPORTS)
+
+	if len(f.imp) != 0 {
+		fprintf(file, "%s\n", strconv.Quote(f.imp))
+	}
+
+	for imp := range g_imported {
+		fprintf(file, "%s\n", strconv.Quote(imp))
+	}
+
+	fprintf(file, ")\n\n")
+}
+
 func main() {
 	s, err := C.ReadFromStream(os.Stdin, nil)
 	assert(err == nil, "%v\n", err)
@@ -1103,8 +1122,11 @@ func main() {
 			}
 		}
 
+		// Write translation functions
+		_, err = x.WriteToTranslators(&buf)
+		assert(err == nil, "%v\n", err)
+
 		assert(f.pkg != "", "missing package annotation for %s", reqf.Filename())
-		// x.srcFiles = append(x.srcFiles, &SrcFile{filename: reqf.Filename(), fset: fset, astFile: f})
 		x.PkgName = f.pkg
 
 		if dirPath, _ := filepath.Split(reqf.Filename()); dirPath != "" {
@@ -1118,49 +1140,19 @@ func main() {
 
 		file, err := os.Create(filename + ".go")
 		assert(err == nil, "%v\n", err)
-		defer file.Close()
 
 		// Write package
 		fprintf(file, "package %s\n\n", f.pkg)
 		fprintf(file, "// AUTO GENERATED - DO NOT EDIT\n\n")
 
 		// Write imports
-		if len(g_imported) != 0 || len(f.imp) != 0 {
-			fprintf(file, "import (\n")
-			if len(f.imp) != 0 {
-				fprintf(file, "%s\n", strconv.Quote(f.imp))
-			}
-
-			for imp := range g_imported {
-				fprintf(file, "%s\n", strconv.Quote(imp))
-			}
-			fprintf(file, ")\n")
-		}
+		writeImports(file, f)
 
 		// Format sources
 		clean, err := format.Source(buf.Bytes())
 		assert(err == nil, "%v\n", err)
 		file.Write(clean)
 
-		// Write translation functions
-		translatorFile, err := os.Create(filename + "tocapnp.go")
-		if err != nil {
-			panic(err)
-		}
-		defer translatorFile.Close()
-		fmt.Fprintf(translatorFile, `package %s
-
-import (
-  capn "github.com/glycerine/go-capnproto"
-  "io"
-)
-
-`, x.PkgName)
-
-		_, err = x.WriteToTranslators(translatorFile)
-		if err != nil {
-			panic(err)
-		}
-
+		defer file.Close()
 	}
 }
