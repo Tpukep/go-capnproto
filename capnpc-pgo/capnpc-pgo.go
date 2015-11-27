@@ -14,7 +14,9 @@ import (
 
 	C "github.com/glycerine/go-capnproto"
 	"github.com/tpukep/bambam/bam"
-	T "github.com/tpukep/go-capnproto"
+	"github.com/tpukep/go-capnproto/check"
+	"github.com/tpukep/go-capnproto/jsontag"
+	"github.com/tpukep/go-capnproto/msgptag"
 )
 
 const STD_IMPORTS = `import (
@@ -992,60 +994,6 @@ func (t Type) json(w io.Writer) {
 	}
 }
 
-func processAnnotations(w io.Writer, t Type_Which, ans Annotation_List) {
-	fprintf(w, " `")
-
-	for i, a := range ans.ToArray() {
-		switch t {
-		case TYPE_INT8, TYPE_UINT8, TYPE_INT16, TYPE_UINT16, TYPE_INT32,
-			TYPE_UINT32, TYPE_INT64, TYPE_UINT64, TYPE_FLOAT32, TYPE_FLOAT64:
-			switch a.Id() {
-			case T.Multof:
-				fprintf(w, "multof:\"%s\"", a.Value().Int32())
-			case T.Min:
-				fprintf(w, "min:\"%s\"", a.Value().Int64())
-			case T.Max:
-				fprintf(w, "max:\"%d\"", a.Value().Int64())
-			}
-
-		case TYPE_TEXT:
-			switch a.Id() {
-			case T.Format:
-				fprintf(w, "format:\"%s\"", a.Value().Text())
-			case T.Pattern:
-				fprintf(w, "pattern:\"%s\"", a.Value().Text())
-			case T.Minlen:
-				fprintf(w, "minlen:\"%d\"", a.Value().Int32())
-			case T.Maxlen:
-				fprintf(w, "maxlen:\"%d\"", a.Value().Int32())
-			}
-
-		case TYPE_LIST:
-			switch a.Id() {
-			case T.Unique:
-				fprintf(w, "unique:\"true\"")
-			case T.Minlen:
-				fprintf(w, "minlen:\"%d\"", a.Value().Int32())
-			case T.Maxlen:
-				fprintf(w, "maxlen:\"%d\"", a.Value().Int32())
-			}
-		}
-
-		switch a.Id() {
-		case T.Required:
-			fprintf(w, "json:\"%s\"", a.Value().Text())
-		case T.Optional:
-			fprintf(w, "json:\"%s,omitempty\"", a.Value().Text())
-		}
-
-		if i != ans.Len()-1 {
-			fprintf(w, " ")
-		} else {
-			fprintf(w, "`")
-		}
-	}
-}
-
 func writeImports(file *os.File, f *node) {
 	fprintf(file, STD_IMPORTS)
 
@@ -1058,6 +1006,62 @@ func writeImports(file *os.File, f *node) {
 	}
 
 	fprintf(file, ")\n\n")
+}
+
+func processAnnotations(w io.Writer, t Type_Which, ans Annotation_List) {
+	fprintf(w, " `")
+
+	for i, a := range ans.ToArray() {
+		switch t {
+		case TYPE_INT8, TYPE_UINT8, TYPE_INT16, TYPE_UINT16, TYPE_INT32,
+			TYPE_UINT32, TYPE_INT64, TYPE_UINT64, TYPE_FLOAT32, TYPE_FLOAT64:
+			switch a.Id() {
+			case check.Multof:
+				fprintf(w, "multof:\"%s\"", a.Value().Int32())
+			case check.Min:
+				fprintf(w, "min:\"%s\"", a.Value().Int64())
+			case check.Max:
+				fprintf(w, "max:\"%d\"", a.Value().Int64())
+			}
+
+		case TYPE_TEXT:
+			switch a.Id() {
+			case check.Format:
+				fprintf(w, "format:\"%s\"", a.Value().Text())
+			case check.Pattern:
+				fprintf(w, "pattern:\"%s\"", a.Value().Text())
+			case check.Minlen:
+				fprintf(w, "minlen:\"%d\"", a.Value().Int32())
+			case check.Maxlen:
+				fprintf(w, "maxlen:\"%d\"", a.Value().Int32())
+			}
+
+		case TYPE_LIST:
+			switch a.Id() {
+			case check.Unique:
+				fprintf(w, "unique:\"true\"")
+			case check.Minlen:
+				fprintf(w, "minlen:\"%d\"", a.Value().Int32())
+			case check.Maxlen:
+				fprintf(w, "maxlen:\"%d\"", a.Value().Int32())
+			}
+		}
+
+		switch a.Id() {
+		case jsontag.Required:
+			fprintf(w, "json:\"%s\"", a.Value().Text())
+		case jsontag.Optional:
+			fprintf(w, "json:\"%s,omitempty\"", a.Value().Text())
+		case msgptag.Field:
+			fprintf(w, "msgp:\"%s\"", a.Value().Text())
+		}
+
+		if i != ans.Len()-1 {
+			fprintf(w, " ")
+		} else {
+			fprintf(w, "`")
+		}
+	}
 }
 
 func main() {

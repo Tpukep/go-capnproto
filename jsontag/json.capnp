@@ -2,7 +2,7 @@
 
 using Go = import "/go.capnp";
 
-$Go.package("capn");
+$Go.package("jsontag");
 
 annotation required(field) :Text;
 annotation optional(field) :Text;
