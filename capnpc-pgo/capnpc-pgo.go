@@ -3,6 +3,7 @@ package main
 import (
 	"bytes"
 	"fmt"
+	"go/ast"
 	"go/format"
 	"io"
 	"log"
@@ -12,10 +13,16 @@ import (
 	"strings"
 
 	C "github.com/glycerine/go-capnproto"
+	"github.com/tpukep/bambam/bam"
 	"github.com/tpukep/go-capnproto/check"
 	"github.com/tpukep/go-capnproto/jsontag"
 	"github.com/tpukep/go-capnproto/msgptag"
 )
+
+const STD_IMPORTS = `import (
+    capn "github.com/glycerine/go-capnproto"
+    "io"
+`
 
 var (
 	fprintf = fmt.Fprintf
@@ -560,9 +567,8 @@ func defineConstNodes(w io.Writer, nodes []*node) {
 	}
 }
 
-func (n *node) defineField(w io.Writer, f Field) {
+func (n *node) defineField(w io.Writer, f Field, x *bam.Extractor) {
 	t := f.Slot().Type()
-	def := f.Slot().DefaultValue()
 
 	if t.Which() == TYPE_INTERFACE {
 		return
@@ -606,55 +612,82 @@ func (n *node) defineField(w io.Writer, f Field) {
 
 	fprintf(&s, "%s ", fname)
 
+	typeName := f.Slot().TypeName(n, customtype)
+	fprintf(&s, "%s", typeName)
+
+	fld := &ast.Field{}
+	goseq := strings.SplitAfter(typeName, "[]")
+	typePrefix := ""
+	if len(goseq) == 2 {
+		typeName = goseq[1]
+		typePrefix = goseq[0]
+	}
+
+	x.GenerateStructField(fname, typePrefix, typeName, fld, t.Which() != TYPE_LIST, fld.Tag, false, goseq)
+
+	if ans := f.Annotations(); ans.Len() != 0 {
+		processAnnotations(&s, t.Which(), ans)
+	}
+
+	fprintf(&s, "\n")
+
+	w.Write(g.Bytes())
+	w.Write(s.Bytes())
+}
+
+func (s FieldSlot) TypeName(n *node, customtype string) string {
+	def := s.DefaultValue()
+	t := s.Type()
+
 	switch t.Which() {
 	case TYPE_BOOL:
 		assert(def.Which() == VALUE_VOID || def.Which() == VALUE_BOOL, "expected bool default")
-		fprintf(&s, "bool")
+		return "bool"
 
 	case TYPE_INT8:
 		assert(def.Which() == VALUE_VOID || def.Which() == VALUE_INT8, "expected int8 default")
-		fprintf(&s, "int8")
+		return "int8"
 
 	case TYPE_UINT8:
 		assert(def.Which() == VALUE_VOID || def.Which() == VALUE_UINT8, "expected uint8 default")
-		fprintf(&s, "uint8")
+		return "uint8"
 
 	case TYPE_INT16:
 		assert(def.Which() == VALUE_VOID || def.Which() == VALUE_INT16, "expected int16 default")
-		fprintf(&s, "int16")
+		return "int16"
 
 	case TYPE_UINT16:
 		assert(def.Which() == VALUE_VOID || def.Which() == VALUE_UINT16, "expected uint16 default")
-		fprintf(&s, "uint16")
+		return "uint16"
 
 	case TYPE_INT32:
 		assert(def.Which() == VALUE_VOID || def.Which() == VALUE_INT32, "expected int32 default")
-		fprintf(&s, "int32")
+		return "int32"
 
 	case TYPE_UINT32:
 		assert(def.Which() == VALUE_VOID || def.Which() == VALUE_UINT32, "expected uint32 default")
-		fprintf(&s, "uint32")
+		return "uint32"
 
 	case TYPE_INT64:
 		assert(def.Which() == VALUE_VOID || def.Which() == VALUE_INT64, "expected int64 default")
-		fprintf(&s, "int64")
+		return "int64"
 
 	case TYPE_UINT64:
 		assert(def.Which() == VALUE_VOID || def.Which() == VALUE_UINT64, "expected uint64 default")
-		fprintf(&s, "uint64")
+		return "uint64"
 
 	case TYPE_FLOAT32:
 		assert(def.Which() == VALUE_VOID || def.Which() == VALUE_FLOAT32, "expected float32 default")
-		fprintf(&s, "float32")
+		return "float32"
 
 	case TYPE_FLOAT64:
 		assert(def.Which() == VALUE_VOID || def.Which() == VALUE_FLOAT64, "expected float64 default")
-		fprintf(&s, "float64")
+		return "float64"
 
 	case TYPE_TEXT:
 		assert(def.Which() == VALUE_VOID || def.Which() == VALUE_TEXT, "expected text default")
 
-		fprintf(&s, "string")
+		return "string"
 
 	case TYPE_DATA:
 		assert(def.Which() == VALUE_VOID || def.Which() == VALUE_DATA, "expected data default")
@@ -668,81 +701,70 @@ func (n *node) defineField(w io.Writer, f Field) {
 			}
 			dstr += "}"
 			if len(customtype) != 0 {
-				fprintf(&g, "%s\n", dstr)
+				return sprintf("%s\n", dstr)
 			}
 		} else {
-			fprintf(&s, "[]byte")
+			return "[]byte"
 		}
 	case TYPE_ENUM:
 		ni := findNode(t.Enum().TypeId())
 		assert(def.Which() == VALUE_VOID || def.Which() == VALUE_ENUM, "expected enum default")
-		fprintf(&s, "%s", ni.remoteName(n))
+		return ni.remoteName(n)
 
 	case TYPE_STRUCT:
 		ni := findNode(t.Struct().TypeId())
 		assert(def.Which() == VALUE_VOID || def.Which() == VALUE_STRUCT, "expected struct default")
-		fprintf(&s, "%s", ni.remoteName(n))
+		return ni.remoteName(n)
 
 	case TYPE_ANYPOINTER:
 		assert(def.Which() == VALUE_VOID || def.Which() == VALUE_ANYPOINTER, "expected object default")
-		fprintf(&s, "interface{}")
+		return "interface{}"
 
 	case TYPE_LIST:
 		assert(def.Which() == VALUE_VOID || def.Which() == VALUE_LIST, "expected list default")
 
-		typ := ""
-
 		switch lt := t.List().ElementType(); lt.Which() {
 		case TYPE_VOID, TYPE_INTERFACE:
-			typ = "[]struct{}"
+			return "[]struct{}"
 		case TYPE_BOOL:
-			typ = "[]bool"
+			return "[]bool"
 		case TYPE_INT8:
-			typ = "[]int8"
+			return "[]int8"
 		case TYPE_UINT8:
-			typ = "[]uint8"
+			return "[]uint8"
 		case TYPE_INT16:
-			typ = "[]int16"
+			return "[]int16"
 		case TYPE_UINT16:
-			typ = "[]uint16"
+			return "[]uint16"
 		case TYPE_INT32:
-			typ = "[]uint32"
+			return "[]uint32"
 		case TYPE_UINT32:
-			typ = "[]uint32"
+			return "[]uint32"
 		case TYPE_INT64:
-			typ = "[]int64"
+			return "[]int64"
 		case TYPE_UINT64:
-			typ = "[]uint64"
+			return "[]uint64"
 		case TYPE_FLOAT32:
-			typ = "[]float32"
+			return "[]float32"
 		case TYPE_FLOAT64:
-			typ = "[]float64"
+			return "[]float64"
 		case TYPE_TEXT:
-			typ = "[]string"
+			return "[]string"
 		case TYPE_DATA:
-			typ = "[]byte"
+			return "[]byte"
 		case TYPE_ENUM:
 			ni := findNode(lt.Enum().TypeId())
-			typ = sprintf("%s", ni.remoteName(n))
+			return sprintf("%s", ni.remoteName(n))
 		case TYPE_STRUCT:
 			ni := findNode(lt.Struct().TypeId())
 
-			typ = sprintf("[]%s", ni.name)
+			return sprintf("[]%s", ni.name)
 		case TYPE_ANYPOINTER, TYPE_LIST:
-			typ = "[]interface{}"
+			return "[]interface{}"
 		}
-
-		fprintf(&s, "%s", typ)
 	}
 
-	if ans := f.Annotations(); ans.Len() != 0 {
-		processAnnotations(&s, t.Which(), ans)
-	}
-
-	fprintf(&s, "\n")
-
-	w.Write(g.Bytes())
-	w.Write(s.Bytes())
+	panic("Unsupported type. Type_Which=" + strconv.Itoa(int(t.Which())))
 }
 
 func (n *node) codeOrderFields() []Field {
@@ -754,7 +776,7 @@ func (n *node) codeOrderFields() []Field {
 	return mbrs
 }
 
-func (n *node) defineStructTypes(w io.Writer, baseNode *node) {
+func (n *node) defineStructTypes(w io.Writer, baseNode *node, x *bam.Extractor) {
 	assert(n.Which() == NODE_STRUCT, "invalid struct node")
 
 	for _, a := range n.Annotations().ToArray() {
@@ -763,16 +785,19 @@ func (n *node) defineStructTypes(w io.Writer, baseNode *node) {
 		}
 	}
 	if baseNode == nil {
+		x.StartStruct(n.name)
+
 		fprintf(w, "type %s struct {\n", n.name)
-		n.defineStructFields(w)
+		n.defineStructFields(w, x)
 		fprintf(w, "}\n\n")
 
 		baseNode = n
+		x.EndStruct()
 	}
 
 	for _, f := range n.codeOrderFields() {
 		if f.Which() == FIELD_GROUP {
-			findNode(f.Group().TypeId()).defineStructTypes(w, baseNode)
+			findNode(f.Group().TypeId()).defineStructTypes(w, baseNode, x)
 		}
 	}
 }
@@ -801,13 +826,13 @@ func (n *node) defineStructEnums(w io.Writer) {
 	}
 }
 
-func (n *node) defineStructFields(w io.Writer) {
+func (n *node) defineStructFields(w io.Writer, x *bam.Extractor) {
 	assert(n.Which() == NODE_STRUCT, "invalid struct node")
 
 	for _, f := range n.codeOrderFields() {
 		switch f.Which() {
 		case FIELD_SLOT:
-			n.defineField(w, f)
+			n.defineField(w, f, x)
 		case FIELD_GROUP:
 			g := findNode(f.Group().TypeId())
 			fname := f.Name()
@@ -816,9 +841,12 @@ func (n *node) defineStructFields(w io.Writer) {
 			}
 			fname = title(fname)
 
-			fprintf(w, "%s struct {\n", fname)
+			typeName := ""
+			fld := &ast.Field{}
+			x.GenerateStructField(fname, "", typeName, fld, false, fld.Tag, true, []string{typeName})
 
-			g.defineStructFields(w)
+			fprintf(w, "%s struct {\n", fname)
+			g.defineStructFields(w, x)
 
 			fprintf(w, "}\n")
 		}
@@ -966,100 +994,18 @@ func (t Type) json(w io.Writer) {
 	}
 }
 
-func main() {
-	s, err := C.ReadFromStream(os.Stdin, nil)
-	assert(err == nil, "%v\n", err)
+func writeImports(file *os.File, f *node) {
+	fprintf(file, STD_IMPORTS)
 
-	req := ReadRootCodeGeneratorRequest(s)
-	allfiles := []*node{}
-
-	for _, ni := range req.Nodes().ToArray() {
-		n := &node{Node: ni}
-		g_nodes[n.Id()] = n
-
-		if n.Which() == NODE_FILE {
-			allfiles = append(allfiles, n)
-		}
+	if len(f.imp) != 0 {
+		fprintf(file, "%s\n", strconv.Quote(f.imp))
 	}
 
-	for _, f := range allfiles {
-		for _, a := range f.Annotations().ToArray() {
-			if v := a.Value(); v.Which() == VALUE_TEXT {
-				switch a.Id() {
-				case C.Package:
-					f.pkg = v.Text()
-				case C.Import:
-					f.imp = v.Text()
-				}
-			}
-		}
-
-		for _, nn := range f.NestedNodes().ToArray() {
-			if ni := g_nodes[nn.Id()]; ni != nil {
-				ni.resolveName("", nn.Name(), f)
-			}
-		}
+	for imp := range g_imported {
+		fprintf(file, "%s\n", strconv.Quote(imp))
 	}
 
-	for _, reqf := range req.RequestedFiles().ToArray() {
-		f := findNode(reqf.Id())
-		buf := bytes.Buffer{}
-		g_imported = make(map[string]bool)
-		g_segment = C.NewBuffer([]byte{})
-		g_bufname = sprintf("x_%x", f.Id())
-
-		defineConstNodes(&buf, f.nodes)
-
-		for _, n := range f.nodes {
-			switch n.Which() {
-			case NODE_ANNOTATION:
-				log.Println("Node annotation:", n)
-			case NODE_ENUM:
-				n.defineEnum(&buf)
-			case NODE_STRUCT:
-				if !n.Struct().IsGroup() {
-					n.defineStructTypes(&buf, nil)
-					n.defineStructEnums(&buf)
-				}
-			}
-		}
-
-		assert(f.pkg != "", "missing package annotation for %s", reqf.Filename())
-
-		if dirPath, _ := filepath.Split(reqf.Filename()); dirPath != "" {
-			err := os.MkdirAll(dirPath, os.ModePerm)
-			assert(err == nil, "%v\n", err)
-		}
-
-		// Create output file
-		filename := strings.TrimSuffix(reqf.Filename(), ".capnp")
-
-		file, err := os.Create(filename + ".go")
-		assert(err == nil, "%v\n", err)
-		defer file.Close()
-
-		// Write package
-		fprintf(file, "package %s\n\n", f.pkg)
-		fprintf(file, "// AUTO GENERATED - DO NOT EDIT\n\n")
-
-		// Write imports
-		if len(g_imported) != 0 || len(f.imp) != 0 {
-			fprintf(file, "import (\n")
-			if len(f.imp) != 0 {
-				fprintf(file, "%s\n", strconv.Quote(f.imp))
-			}
-
-			for imp := range g_imported {
-				fprintf(file, "%s\n", strconv.Quote(imp))
-			}
-			fprintf(file, ")\n")
-		}
-
-		// Format sources
-		clean, err := format.Source(buf.Bytes())
-		assert(err == nil, "%v\n", err)
-		file.Write(clean)
-	}
+	fprintf(file, ")\n\n")
 }
 
 func processAnnotations(w io.Writer, t Type_Which, ans Annotation_List) {
@@ -1115,5 +1061,102 @@ func processAnnotations(w io.Writer, t Type_Which, ans Annotation_List) {
 		} else {
 			fprintf(w, "`")
 		}
+	}
+}
+
+func main() {
+	s, err := C.ReadFromStream(os.Stdin, nil)
+	assert(err == nil, "%v\n", err)
+
+	req := ReadRootCodeGeneratorRequest(s)
+	allfiles := []*node{}
+
+	for _, ni := range req.Nodes().ToArray() {
+		n := &node{Node: ni}
+		g_nodes[n.Id()] = n
+
+		if n.Which() == NODE_FILE {
+			allfiles = append(allfiles, n)
+		}
+	}
+
+	for _, f := range allfiles {
+		for _, a := range f.Annotations().ToArray() {
+			if v := a.Value(); v.Which() == VALUE_TEXT {
+				switch a.Id() {
+				case C.Package:
+					f.pkg = v.Text()
+				case C.Import:
+					f.imp = v.Text()
+				}
+			}
+		}
+
+		for _, nn := range f.NestedNodes().ToArray() {
+			if ni := g_nodes[nn.Id()]; ni != nil {
+				ni.resolveName("", nn.Name(), f)
+			}
+		}
+	}
+
+	for _, reqf := range req.RequestedFiles().ToArray() {
+		x := bam.NewExtractor()
+		x.FieldPrefix = "   "
+		x.FieldSuffix = "\n"
+
+		f := findNode(reqf.Id())
+		buf := bytes.Buffer{}
+		g_imported = make(map[string]bool)
+		g_segment = C.NewBuffer([]byte{})
+		g_bufname = sprintf("x_%x", f.Id())
+
+		defineConstNodes(&buf, f.nodes)
+
+		for _, n := range f.nodes {
+			switch n.Which() {
+			case NODE_ANNOTATION:
+				log.Println("Node annotation:", n)
+			case NODE_ENUM:
+				n.defineEnum(&buf)
+			case NODE_STRUCT:
+				if !n.Struct().IsGroup() {
+					n.defineStructTypes(&buf, nil, x)
+					n.defineStructEnums(&buf)
+				}
+			}
+		}
+
+		// Write translation functions
+		_, err = x.WriteToTranslators(&buf)
+		assert(err == nil, "%v\n", err)
+
+		assert(f.pkg != "", "missing package annotation for %s", reqf.Filename())
+		x.PkgName = f.pkg
+
+		if dirPath, _ := filepath.Split(reqf.Filename()); dirPath != "" {
+			err := os.MkdirAll(dirPath, os.ModePerm)
+			assert(err == nil, "%v\n", err)
+			x.OutDir = dirPath
+		}
+
+		// Create output file
+		filename := strings.TrimSuffix(reqf.Filename(), ".capnp")
+
+		file, err := os.Create(filename + ".go")
+		assert(err == nil, "%v\n", err)
+
+		// Write package
+		fprintf(file, "package %s\n\n", f.pkg)
+		fprintf(file, "// AUTO GENERATED - DO NOT EDIT\n\n")
+
+		// Write imports
+		writeImports(file, f)
+
+		// Format sources
+		clean, err := format.Source(buf.Bytes())
+		assert(err == nil, "%v\n", err)
+		file.Write(clean)
+
+		defer file.Close()
 	}
 }
