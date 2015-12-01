@@ -998,11 +998,11 @@ func writeImports(file *os.File, f *node) {
 	fprintf(file, STD_IMPORTS)
 
 	if len(f.imp) != 0 {
-		fprintf(file, "%s\n", strconv.Quote(f.imp))
+		fprintf(file, "    %q\n", f.imp)
 	}
 
 	for imp := range g_imported {
-		fprintf(file, "%s\n", strconv.Quote(imp))
+		fprintf(file, "%q\n", imp)
 	}
 
 	fprintf(file, ")\n\n")
