@@ -1,4 +1,4 @@
-package capn
+package caps
 
 const Multof = uint64(0xda1a86f65e4b4c6b)
 const Min = uint64(0xd3321ca4bea9e8ef)

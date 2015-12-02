@@ -14,7 +14,7 @@ import (
 
 	C "github.com/glycerine/go-capnproto"
 	"github.com/tpukep/bambam/bam"
-	T "github.com/tpukep/go-capnproto"
+	"github.com/tpukep/caps"
 )
 
 var (
@@ -1012,34 +1012,34 @@ func (n *node) processAnnotations(w io.Writer, t Type_Which, ans Annotation_List
 		set[a.Id()] = true
 	}
 
-	assert((set[T.Required] && set[T.Ignored]) != true, "Field annnotations 'required' and 'ignored' are incompatible.")
-	assert((set[T.Required] && set[T.Optional]) != true, "Annnotations 'required' and 'optional' are incompatible")
-	assert((set[T.Optional] && set[T.Ignored]) != true, "Annnotations 'optional' and 'ignored' are incompatible")
+	assert((set[caps.Required] && set[caps.Ignored]) != true, "Field annnotations 'required' and 'ignored' are incompatible.")
+	assert((set[caps.Required] && set[caps.Optional]) != true, "Annnotations 'required' and 'optional' are incompatible")
+	assert((set[caps.Optional] && set[caps.Ignored]) != true, "Annnotations 'optional' and 'ignored' are incompatible")
 
 	tags := []string{}
 
 	for _, a := range ans.ToArray() {
 		// Codecs Tags
 		switch a.Id() {
-		case T.Ignored:
-			if _, found := n.codecs[T.Json]; found {
+		case caps.Ignored:
+			if _, found := n.codecs[caps.Json]; found {
 				tags = append(tags, fmt.Sprintf("json:\"-\""))
 			}
-			if _, found := n.codecs[T.Msgp]; found {
+			if _, found := n.codecs[caps.Msgp]; found {
 				tags = append(tags, fmt.Sprintf("msg:\"-\""))
 			}
-		case T.Optional:
-			if _, found := n.codecs[T.Json]; found {
+		case caps.Optional:
+			if _, found := n.codecs[caps.Json]; found {
 				tags = append(tags, fmt.Sprintf("json:\"%s,omitempty\"", a.Value().Text()))
 			}
-			if _, found := n.codecs[T.Msgp]; found {
+			if _, found := n.codecs[caps.Msgp]; found {
 				tags = append(tags, fmt.Sprintf("msg:\"%s\"", a.Value().Text()))
 			}
-		case T.Required:
-			if _, found := n.codecs[T.Json]; found {
+		case caps.Required:
+			if _, found := n.codecs[caps.Json]; found {
 				tags = append(tags, fmt.Sprintf("json:\"%s\"", a.Value().Text()))
 			}
-			if _, found := n.codecs[T.Msgp]; found {
+			if _, found := n.codecs[caps.Msgp]; found {
 				tags = append(tags, fmt.Sprintf("msg:\"%s\"", a.Value().Text()))
 			}
 		}
@@ -1049,33 +1049,33 @@ func (n *node) processAnnotations(w io.Writer, t Type_Which, ans Annotation_List
 		case TYPE_INT8, TYPE_UINT8, TYPE_INT16, TYPE_UINT16, TYPE_INT32,
 			TYPE_UINT32, TYPE_INT64, TYPE_UINT64, TYPE_FLOAT32, TYPE_FLOAT64:
 			switch a.Id() {
-			case T.Multof:
+			case caps.Multof:
 				tags = append(tags, fmt.Sprintf("multof:\"%s\"", a.Value().Int32()))
-			case T.Min:
+			case caps.Min:
 				tags = append(tags, fmt.Sprintf("min:\"%s\"", a.Value().Int64()))
-			case T.Max:
+			case caps.Max:
 				tags = append(tags, fmt.Sprintf("max:\"%d\"", a.Value().Int64()))
 			}
 
 		case TYPE_TEXT:
 			switch a.Id() {
-			case T.Format:
+			case caps.Format:
 				tags = append(tags, fmt.Sprintf("format:\"%s\"", a.Value().Text()))
-			case T.Pattern:
+			case caps.Pattern:
 				tags = append(tags, fmt.Sprintf("pattern:\"%s\"", a.Value().Text()))
-			case T.Minlen:
+			case caps.Minlen:
 				tags = append(tags, fmt.Sprintf("minlen:\"%d\"", a.Value().Int32()))
-			case T.Maxlen:
+			case caps.Maxlen:
 				tags = append(tags, fmt.Sprintf("maxlen:\"%d\"", a.Value().Int32()))
 			}
 
 		case TYPE_LIST:
 			switch a.Id() {
-			case T.Unique:
+			case caps.Unique:
 				tags = append(tags, fmt.Sprintf("unique:\"true\""))
-			case T.Minlen:
+			case caps.Minlen:
 				tags = append(tags, fmt.Sprintf("minlen:\"%d\"", a.Value().Int32()))
-			case T.Maxlen:
+			case caps.Maxlen:
 				tags = append(tags, fmt.Sprintf("maxlen:\"%d\"", a.Value().Int32()))
 			}
 		}
@@ -1121,14 +1121,14 @@ func main() {
 				}
 			} else {
 				switch a.Id() {
-				case T.Capnp:
-					enableCodec(f, T.Capnp)
+				case caps.Capnp:
+					enableCodec(f, caps.Capnp)
 					g_imported["io"] = true
 					g_imported[GO_CAPNP_IMPORT] = true
-				case T.Json:
-					enableCodec(f, T.Json)
-				case T.Msgp:
-					enableCodec(f, T.Msgp)
+				case caps.Json:
+					enableCodec(f, caps.Json)
+				case caps.Msgp:
+					enableCodec(f, caps.Msgp)
 				}
 			}
 		}
@@ -1173,7 +1173,7 @@ func main() {
 		}
 
 		// Write translation functions
-		if _, found := f.codecs[T.Capnp]; found {
+		if _, found := f.codecs[caps.Capnp]; found {
 			log.Println("Writing translator functions")
 			_, err = x.WriteToTranslators(&buf)
 			assert(err == nil, "%v\n", err)

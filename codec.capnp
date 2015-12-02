@@ -2,7 +2,7 @@
 
 using Go = import "/go.capnp";
 
-$Go.package("capn");
+$Go.package("caps");
 
 annotation msgp(file) :Void;
 annotation json(file) :Void;

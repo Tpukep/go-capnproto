@@ -5,10 +5,10 @@ It integrates MsgPack and Capn'proto code generators. Code generation options av
 
 1. Install `capnp` tool. [Instructions](https://capnproto.org/install.html)
 
-2. Install `go-capnproto`
+2. Install `caps`
    
    ```sh
-   go get github.com/tpukep/go-capnproto/...
+   go get github.com/tpukep/caps/...
    ```
 
 3. Write Capn'proto schema

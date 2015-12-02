@@ -2,7 +2,7 @@
 
 using Go = import "/go.capnp";
 
-$Go.package("capn");
+$Go.package("caps");
 
 # Number check
 annotation multof(field) :UInt32;
