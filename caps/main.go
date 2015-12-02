@@ -16,20 +16,22 @@ import (
 )
 
 var (
-	outdir   = flag.String("o", ".", "specify output directory")
-	capnpGen = flag.Bool("capnp", true, "generate Go Capn'p code")
-	msgpGen  = flag.Bool("msgp", true, "generate Msgp code")
-	source   = flag.String("source", "", "source schema file")
-	verbose  = flag.Bool("verbose", false, "verbose mode")
+	outdir       = flag.String("o", ".", "specify output directory")
+	source       = flag.String("source", "", "specify output directory")
+	verbose      = flag.Bool("verbose", false, "verbose mode")
+	structTypeRe = regexp.MustCompile("struct ([[:alpha:]]+)")
+)
+
+const (
+	CAPNP_CODEC_ANT = "$Codec.capnp;"
+	MSGP_CODEC_ANT  = "$Codec.msgp;"
 )
 
 func use() {
-	fmt.Fprintf(os.Stderr, "\nuse: go-capnproto -o <outdir> -capnp -msgp -source=<model.capnp>\n")
+	fmt.Fprintf(os.Stderr, "\nuse: caps -o <outdir> -source=<model.capnp>\n")
 	fmt.Fprintf(os.Stderr, "     # Tool reads .capnp files and writes: go structs with json tags, capn'proto code, translation code, msgp code.\n")
 	fmt.Fprintf(os.Stderr, "     # options:\n")
 	fmt.Fprintf(os.Stderr, "     #   -o=\"outdir\" specifies the directory to write to (created if need be).\n")
-	fmt.Fprintf(os.Stderr, "     #   -capnp=true specifies generate Capn'proto code or not\n")
-	fmt.Fprintf(os.Stderr, "     #   -msgp=true specifies generate Msgp code or not\n")
 	fmt.Fprintf(os.Stderr, "     #   -verbose=true enables verbose mode \n")
 	fmt.Fprintf(os.Stderr, "     # required:\n")
 	fmt.Fprintf(os.Stderr, "     #   -source=model.capnp specifies input schema file\n")
@@ -49,13 +51,29 @@ func main() {
 	source := *source
 	gopath := os.Getenv("GOPATH")
 
-	checkSchemaPath := fmt.Sprintf("-I%s/src/github.com/tpukep/go-capnproto/check", gopath)
-	jsonTagSchemaPath := fmt.Sprintf("-I%s/src/github.com/tpukep/go-capnproto/jsontag", gopath)
-	msgpTagSchemaPath := fmt.Sprintf("-I%s/src/github.com/tpukep/go-capnproto/msgptag", gopath)
+	capsSchemaPath := fmt.Sprintf("-I%s/src/github.com/tpukep/go-capnproto", gopath)
 	goSchemaPath := fmt.Sprintf("-I%s/src/github.com/tpukep/go-capnproto/vendor/github.com/glycerine/go-capnproto", gopath)
 
-	capnpArgs := []string{checkSchemaPath, jsonTagSchemaPath, msgpTagSchemaPath, goSchemaPath, "compile", "-opgo"}
-	if *capnpGen {
+	capnpArgs := []string{capsSchemaPath, goSchemaPath, "compile", "-opgo"}
+
+	sourceData, err := ioutil.ReadFile(source)
+	if err != nil {
+		log.Fatalln("Failed to read schema file:", err)
+	}
+
+	sourceContent := string(sourceData)
+	// Remove comments
+	re := regexp.MustCompile("(?m)[\r\n]+^.*#.*$")
+	cleanContent := re.ReplaceAllString(sourceContent, "")
+
+	// Find codec annotations
+	capnpRe := regexp.MustCompile("(?m)[\r\n]+^.*" + regexp.QuoteMeta(CAPNP_CODEC_ANT) + ".*$")
+	msgpRe := regexp.MustCompile("(?m)[\r\n]+^.*" + regexp.QuoteMeta(MSGP_CODEC_ANT) + ".*$")
+
+	capnpGen := capnpRe.MatchString(cleanContent)
+	msgpGen := msgpRe.MatchString(cleanContent)
+
+	if capnpGen {
 		capnpArgs = append(capnpArgs, "-ogo")
 	}
 
@@ -81,18 +99,14 @@ func main() {
 		fmt.Printf("Executing: %q\n", strings.Join(cmd.Args, " "))
 	}
 
-	err := cmd.Run()
+	err = cmd.Run()
 	if err != nil {
 		log.Fatalln("Failed to run Plain go code generator:", err)
 	}
 
-	if *capnpGen {
+	if capnpGen {
 		// Add suffix "Capn" to Capn'proto structs
 		outFilename := filepath.Join(*outdir, source[:strings.LastIndex(source, ".")]+".capnp.go")
-		sourceData, err := ioutil.ReadFile(source)
-		if err != nil {
-			log.Fatalln("Failed to read schema file:", err)
-		}
 
 		data, err := ioutil.ReadFile(outFilename)
 		if err != nil {
@@ -100,8 +114,7 @@ func main() {
 		}
 
 		content := string(data)
-		re := regexp.MustCompile("struct ([[:alpha:]]+)")
-		matches := re.FindAllStringSubmatch(string(sourceData), -1)
+		matches := structTypeRe.FindAllStringSubmatch(sourceContent, -1)
 		for _, match := range matches {
 			structType := match[1]
 			if structType != "" {
@@ -116,7 +129,7 @@ func main() {
 	}
 
 	// Generate Msgp code
-	if *msgpGen {
+	if msgpGen {
 		baseFilename := filepath.Base(source)
 		inFilename := filepath.Join(*outdir, source[:strings.LastIndex(source, ".")]+".go")
 		outFilename := filepath.Join(*outdir, baseFilename[:strings.LastIndex(baseFilename, ".")]+".msgp.go")

@@ -14,15 +14,8 @@ import (
 
 	C "github.com/glycerine/go-capnproto"
 	"github.com/tpukep/bambam/bam"
-	"github.com/tpukep/go-capnproto/check"
-	"github.com/tpukep/go-capnproto/jsontag"
-	"github.com/tpukep/go-capnproto/msgptag"
+	T "github.com/tpukep/go-capnproto"
 )
-
-const STD_IMPORTS = `import (
-    capn "github.com/glycerine/go-capnproto"
-    "io"
-`
 
 var (
 	fprintf = fmt.Fprintf
@@ -33,14 +26,16 @@ var (
 var g_nodes = make(map[uint64]*node)
 var g_imported map[string]bool
 var g_segment *C.Segment
-var g_bufname string
+
+const GO_CAPNP_IMPORT = "github.com/glycerine/go-capnproto"
 
 type node struct {
 	Node
-	pkg   string
-	imp   string
-	nodes []*node
-	name  string
+	pkg    string
+	imp    string
+	nodes  []*node
+	name   string
+	codecs map[uint64]bool
 }
 
 func assert(chk bool, format string, a ...interface{}) {
@@ -515,6 +510,7 @@ func (n *node) writeValue(w io.Writer, t Type, v Value) {
 }
 
 func (n *node) defineAnnotation(w io.Writer) {
+	log.Println("Annotation", n.name)
 	fprintf(w, "const %s = uint64(0x%x)\n", n.name, n.Id())
 }
 
@@ -626,7 +622,7 @@ func (n *node) defineField(w io.Writer, f Field, x *bam.Extractor) {
 	x.GenerateStructField(fname, typePrefix, typeName, fld, t.Which() != TYPE_LIST, fld.Tag, false, goseq)
 
 	if ans := f.Annotations(); ans.Len() != 0 {
-		processAnnotations(&s, t.Which(), ans)
+		n.processAnnotations(&s, t.Which(), ans)
 	}
 
 	fprintf(&s, "\n")
@@ -994,73 +990,105 @@ func (t Type) json(w io.Writer) {
 	}
 }
 
-func writeImports(file *os.File, f *node) {
-	fprintf(file, STD_IMPORTS)
+func (n *node) writeImports(file *os.File) {
+	if n.imp != "" || len(g_imported) > 0 {
+		fprintf(file, "import (\n")
+		if n.imp != "" {
+			fprintf(file, "    %q\n", n.imp)
+		}
 
-	if len(f.imp) != 0 {
-		fprintf(file, "    %q\n", f.imp)
+		for imp := range g_imported {
+			fprintf(file, "    %q\n", imp)
+		}
+
+		fprintf(file, ")\n\n")
 	}
-
-	for imp := range g_imported {
-		fprintf(file, "%q\n", imp)
-	}
-
-	fprintf(file, ")\n\n")
 }
 
-func processAnnotations(w io.Writer, t Type_Which, ans Annotation_List) {
-	fprintf(w, " `")
+func (n *node) processAnnotations(w io.Writer, t Type_Which, ans Annotation_List) {
+	set := make(map[uint64]bool)
 
-	for i, a := range ans.ToArray() {
+	for _, a := range ans.ToArray() {
+		set[a.Id()] = true
+	}
+
+	assert((set[T.Required] && set[T.Ignored]) != true, "Field annnotations 'required' and 'ignored' are incompatible.")
+	assert((set[T.Required] && set[T.Optional]) != true, "Annnotations 'required' and 'optional' are incompatible")
+	assert((set[T.Optional] && set[T.Ignored]) != true, "Annnotations 'optional' and 'ignored' are incompatible")
+
+	tags := []string{}
+
+	for _, a := range ans.ToArray() {
+		// Codecs Tags
+		switch a.Id() {
+		case T.Ignored:
+			if _, found := n.codecs[T.Json]; found {
+				tags = append(tags, fmt.Sprintf("json:\"-\""))
+			}
+			if _, found := n.codecs[T.Msgp]; found {
+				tags = append(tags, fmt.Sprintf("msg:\"-\""))
+			}
+		case T.Optional:
+			if _, found := n.codecs[T.Json]; found {
+				tags = append(tags, fmt.Sprintf("json:\"%s,omitempty\"", a.Value().Text()))
+			}
+			if _, found := n.codecs[T.Msgp]; found {
+				tags = append(tags, fmt.Sprintf("msg:\"%s\"", a.Value().Text()))
+			}
+		case T.Required:
+			if _, found := n.codecs[T.Json]; found {
+				tags = append(tags, fmt.Sprintf("json:\"%s\"", a.Value().Text()))
+			}
+			if _, found := n.codecs[T.Msgp]; found {
+				tags = append(tags, fmt.Sprintf("msg:\"%s\"", a.Value().Text()))
+			}
+		}
+
+		// Check Tags
 		switch t {
 		case TYPE_INT8, TYPE_UINT8, TYPE_INT16, TYPE_UINT16, TYPE_INT32,
 			TYPE_UINT32, TYPE_INT64, TYPE_UINT64, TYPE_FLOAT32, TYPE_FLOAT64:
 			switch a.Id() {
-			case check.Multof:
-				fprintf(w, "multof:\"%s\"", a.Value().Int32())
-			case check.Min:
-				fprintf(w, "min:\"%s\"", a.Value().Int64())
-			case check.Max:
-				fprintf(w, "max:\"%d\"", a.Value().Int64())
+			case T.Multof:
+				tags = append(tags, fmt.Sprintf("multof:\"%s\"", a.Value().Int32()))
+			case T.Min:
+				tags = append(tags, fmt.Sprintf("min:\"%s\"", a.Value().Int64()))
+			case T.Max:
+				tags = append(tags, fmt.Sprintf("max:\"%d\"", a.Value().Int64()))
 			}
 
 		case TYPE_TEXT:
 			switch a.Id() {
-			case check.Format:
-				fprintf(w, "format:\"%s\"", a.Value().Text())
-			case check.Pattern:
-				fprintf(w, "pattern:\"%s\"", a.Value().Text())
-			case check.Minlen:
-				fprintf(w, "minlen:\"%d\"", a.Value().Int32())
-			case check.Maxlen:
-				fprintf(w, "maxlen:\"%d\"", a.Value().Int32())
+			case T.Format:
+				tags = append(tags, fmt.Sprintf("format:\"%s\"", a.Value().Text()))
+			case T.Pattern:
+				tags = append(tags, fmt.Sprintf("pattern:\"%s\"", a.Value().Text()))
+			case T.Minlen:
+				tags = append(tags, fmt.Sprintf("minlen:\"%d\"", a.Value().Int32()))
+			case T.Maxlen:
+				tags = append(tags, fmt.Sprintf("maxlen:\"%d\"", a.Value().Int32()))
 			}
 
 		case TYPE_LIST:
 			switch a.Id() {
-			case check.Unique:
-				fprintf(w, "unique:\"true\"")
-			case check.Minlen:
-				fprintf(w, "minlen:\"%d\"", a.Value().Int32())
-			case check.Maxlen:
-				fprintf(w, "maxlen:\"%d\"", a.Value().Int32())
+			case T.Unique:
+				tags = append(tags, fmt.Sprintf("unique:\"true\""))
+			case T.Minlen:
+				tags = append(tags, fmt.Sprintf("minlen:\"%d\"", a.Value().Int32()))
+			case T.Maxlen:
+				tags = append(tags, fmt.Sprintf("maxlen:\"%d\"", a.Value().Int32()))
 			}
 		}
 
-		switch a.Id() {
-		case jsontag.Required:
-			fprintf(w, "json:\"%s\"", a.Value().Text())
-		case jsontag.Optional:
-			fprintf(w, "json:\"%s,omitempty\"", a.Value().Text())
-		case msgptag.Field:
-			fprintf(w, "msgp:\"%s\"", a.Value().Text())
-		}
+		// if i != ans.Len()-1 {
+		// 	tags = append(tags, fprintf(" "))
+		// } else {
+		// 	fprintf(w, "`")
+		// }
+	}
 
-		if i != ans.Len()-1 {
-			fprintf(w, " ")
-		} else {
-			fprintf(w, "`")
-		}
+	if len(tags) != 0 {
+		fprintf(w, "`%s`", strings.Join(tags, " "))
 	}
 }
 
@@ -1072,13 +1100,15 @@ func main() {
 	allfiles := []*node{}
 
 	for _, ni := range req.Nodes().ToArray() {
-		n := &node{Node: ni}
+		n := &node{Node: ni, codecs: make(map[uint64]bool)}
 		g_nodes[n.Id()] = n
 
 		if n.Which() == NODE_FILE {
 			allfiles = append(allfiles, n)
 		}
 	}
+
+	g_imported = make(map[string]bool)
 
 	for _, f := range allfiles {
 		for _, a := range f.Annotations().ToArray() {
@@ -1088,6 +1118,17 @@ func main() {
 					f.pkg = v.Text()
 				case C.Import:
 					f.imp = v.Text()
+				}
+			} else {
+				switch a.Id() {
+				case T.Capnp:
+					enableCodec(f, T.Capnp)
+					g_imported["io"] = true
+					g_imported[GO_CAPNP_IMPORT] = true
+				case T.Json:
+					enableCodec(f, T.Json)
+				case T.Msgp:
+					enableCodec(f, T.Msgp)
 				}
 			}
 		}
@@ -1106,9 +1147,13 @@ func main() {
 
 		f := findNode(reqf.Id())
 		buf := bytes.Buffer{}
-		g_imported = make(map[string]bool)
 		g_segment = C.NewBuffer([]byte{})
-		g_bufname = sprintf("x_%x", f.Id())
+
+		for _, n := range f.nodes {
+			if n.Which() == NODE_ANNOTATION {
+				n.defineAnnotation(&buf)
+			}
+		}
 
 		defineConstNodes(&buf, f.nodes)
 
@@ -1116,6 +1161,7 @@ func main() {
 			switch n.Which() {
 			case NODE_ANNOTATION:
 				log.Println("Node annotation:", n)
+				// n.defineAnnotation(&buf)
 			case NODE_ENUM:
 				n.defineEnum(&buf)
 			case NODE_STRUCT:
@@ -1127,8 +1173,11 @@ func main() {
 		}
 
 		// Write translation functions
-		_, err = x.WriteToTranslators(&buf)
-		assert(err == nil, "%v\n", err)
+		if _, found := f.codecs[T.Capnp]; found {
+			log.Println("Writing translator functions")
+			_, err = x.WriteToTranslators(&buf)
+			assert(err == nil, "%v\n", err)
+		}
 
 		assert(f.pkg != "", "missing package annotation for %s", reqf.Filename())
 		x.PkgName = f.pkg
@@ -1150,7 +1199,7 @@ func main() {
 		fprintf(file, "// AUTO GENERATED - DO NOT EDIT\n\n")
 
 		// Write imports
-		writeImports(file, f)
+		f.writeImports(file)
 
 		// Format sources
 		clean, err := format.Source(buf.Bytes())
@@ -1158,5 +1207,13 @@ func main() {
 		file.Write(clean)
 
 		defer file.Close()
+	}
+}
+
+func enableCodec(n *node, codec uint64) {
+	n.codecs[codec] = true
+	for _, nst := range n.NestedNodes().ToArray() {
+		nn := findNode(nst.Id())
+		enableCodec(nn, codec)
 	}
 }

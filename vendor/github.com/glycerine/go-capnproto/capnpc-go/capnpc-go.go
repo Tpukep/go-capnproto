@@ -57,12 +57,12 @@ func findNode(id uint64) *node {
 
 func (n *node) remoteScope(from *node) string {
 	assert(n.pkg != "", "missing package declaration for %s", n.DisplayName())
-	assert(n.imp != "", "missing import declaration for %s", n.DisplayName())
-	assert(from.imp != "", "missing import declaration for %s", from.DisplayName())
 
 	if n.imp == from.imp {
 		return ""
 	} else {
+		assert(n.imp != "", "missing import declaration for %s", n.DisplayName())
+
 		g_imported[n.imp] = true
 		return n.pkg + "."
 	}
