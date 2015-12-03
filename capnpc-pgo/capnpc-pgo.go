@@ -510,7 +510,6 @@ func (n *node) writeValue(w io.Writer, t Type, v Value) {
 }
 
 func (n *node) defineAnnotation(w io.Writer) {
-	log.Println("Annotation", n.name)
 	fprintf(w, "const %s = uint64(0x%x)\n", n.name, n.Id())
 }
 
@@ -570,11 +569,14 @@ func (n *node) defineField(w io.Writer, f Field, x *bam.Extractor) {
 		return
 	}
 
-	fname := f.Name()
+	var fname string
 
 	if an := nameAnnotation(f.Annotations()); an != "" {
 		fname = an
+	} else {
+		fname = f.Name()
 	}
+
 	fname = title(fname)
 
 	var g, s bytes.Buffer
@@ -621,9 +623,8 @@ func (n *node) defineField(w io.Writer, f Field, x *bam.Extractor) {
 
 	x.GenerateStructField(fname, typePrefix, typeName, fld, t.Which() != TYPE_LIST, fld.Tag, false, goseq)
 
-	if ans := f.Annotations(); ans.Len() != 0 {
-		n.processAnnotations(&s, t.Which(), ans)
-	}
+	ans := f.Annotations()
+	n.processAnnotations(&s, f, t.Which(), ans)
 
 	fprintf(&s, "\n")
 
@@ -1005,46 +1006,56 @@ func (n *node) writeImports(file *os.File) {
 	}
 }
 
-func (n *node) processAnnotations(w io.Writer, t Type_Which, ans Annotation_List) {
-	set := make(map[uint64]bool)
+func (n *node) processAnnotations(w io.Writer, f Field, t Type_Which, ans Annotation_List) {
+	annotations := make(map[uint64]Annotation)
 
 	for _, a := range ans.ToArray() {
-		set[a.Id()] = true
+		annotations[a.Id()] = a
 	}
 
-	assert((set[caps.Required] && set[caps.Ignored]) != true, "Field annnotations 'required' and 'ignored' are incompatible.")
-	assert((set[caps.Required] && set[caps.Optional]) != true, "Annnotations 'required' and 'optional' are incompatible")
-	assert((set[caps.Optional] && set[caps.Ignored]) != true, "Annnotations 'optional' and 'ignored' are incompatible")
+	req, required := annotations[caps.Required]
+	opt, optional := annotations[caps.Optional]
+	_, ignored := annotations[caps.Ignored]
+
+	assert(!(required && ignored), "Field annnotations 'required' and 'ignored' are incompatible.")
+	assert(!(required && optional), "Annnotations 'required' and 'optional' are incompatible")
+	assert(!(optional && ignored), "Annnotations 'optional' and 'ignored' are incompatible")
 
 	tags := []string{}
 
-	for _, a := range ans.ToArray() {
-		// Codecs Tags
-		switch a.Id() {
-		case caps.Ignored:
-			if _, found := n.codecs[caps.Json]; found {
-				tags = append(tags, fmt.Sprintf("json:\"-\""))
-			}
-			if _, found := n.codecs[caps.Msgp]; found {
-				tags = append(tags, fmt.Sprintf("msg:\"-\""))
-			}
-		case caps.Optional:
-			if _, found := n.codecs[caps.Json]; found {
-				tags = append(tags, fmt.Sprintf("json:\"%s,omitempty\"", a.Value().Text()))
-			}
-			if _, found := n.codecs[caps.Msgp]; found {
-				tags = append(tags, fmt.Sprintf("msg:\"%s\"", a.Value().Text()))
-			}
-		case caps.Required:
-			if _, found := n.codecs[caps.Json]; found {
-				tags = append(tags, fmt.Sprintf("json:\"%s\"", a.Value().Text()))
-			}
-			if _, found := n.codecs[caps.Msgp]; found {
-				tags = append(tags, fmt.Sprintf("msg:\"%s\"", a.Value().Text()))
-			}
+	// Codecs Tags
+	if ignored {
+		if _, found := n.codecs[caps.Json]; found {
+			tags = append(tags, fmt.Sprintf("json:\"-\""))
 		}
+		if _, found := n.codecs[caps.Msgp]; found {
+			tags = append(tags, fmt.Sprintf("msg:\"-\""))
+		}
+	} else if optional {
+		if _, found := n.codecs[caps.Json]; found {
+			tags = append(tags, fmt.Sprintf("json:\"%s,omitempty\"", opt.Value().Text()))
+		}
+		if _, found := n.codecs[caps.Msgp]; found {
+			tags = append(tags, fmt.Sprintf("msg:\"%s\"", opt.Value().Text()))
+		}
+	} else if required {
+		if _, found := n.codecs[caps.Json]; found {
+			tags = append(tags, fmt.Sprintf("json:\"%s\"", req.Value().Text()))
+		}
+		if _, found := n.codecs[caps.Msgp]; found {
+			tags = append(tags, fmt.Sprintf("msg:\"%s\"", req.Value().Text()))
+		}
+	} else {
+		if _, found := n.codecs[caps.Json]; found {
+			tags = append(tags, fmt.Sprintf("json:\"%s\"", f.Name()))
+		}
+		if _, found := n.codecs[caps.Msgp]; found {
+			tags = append(tags, fmt.Sprintf("msg:\"%s\"", f.Name()))
+		}
+	}
 
-		// Check Tags
+	// Check Tags
+	for _, a := range ans.ToArray() {
 		switch t {
 		case TYPE_INT8, TYPE_UINT8, TYPE_INT16, TYPE_UINT16, TYPE_INT32,
 			TYPE_UINT32, TYPE_INT64, TYPE_UINT64, TYPE_FLOAT32, TYPE_FLOAT64:
@@ -1149,19 +1160,12 @@ func main() {
 		buf := bytes.Buffer{}
 		g_segment = C.NewBuffer([]byte{})
 
-		for _, n := range f.nodes {
-			if n.Which() == NODE_ANNOTATION {
-				n.defineAnnotation(&buf)
-			}
-		}
-
 		defineConstNodes(&buf, f.nodes)
 
 		for _, n := range f.nodes {
 			switch n.Which() {
 			case NODE_ANNOTATION:
-				log.Println("Node annotation:", n)
-				// n.defineAnnotation(&buf)
+				n.defineAnnotation(&buf)
 			case NODE_ENUM:
 				n.defineEnum(&buf)
 			case NODE_STRUCT:
@@ -1174,7 +1178,6 @@ func main() {
 
 		// Write translation functions
 		if _, found := f.codecs[caps.Capnp]; found {
-			log.Println("Writing translator functions")
 			_, err = x.WriteToTranslators(&buf)
 			assert(err == nil, "%v\n", err)
 		}

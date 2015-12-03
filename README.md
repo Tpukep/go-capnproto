@@ -3,6 +3,8 @@ It integrates MsgPack and Capn'proto code generators. Code generation options av
 
 # HOW TO
 
+You need Go 1.5 version. Set environment variable: `GO15VENDOREXPERIMENT=1`.
+
 1. Install `capnp` tool. [Instructions](https://capnproto.org/install.html)
 
 2. Install `caps`
@@ -11,9 +13,7 @@ It integrates MsgPack and Capn'proto code generators. Code generation options av
    go get github.com/tpukep/caps/...
    ```
 
-3. Write Capn'proto schema
-
-   For example `model.capnp`:
+3. Write Capn'proto schema `model.capnp`:
    ```capnp
    @0xad8d3cbc6db52a1d;
    
@@ -31,7 +31,7 @@ It integrates MsgPack and Capn'proto code generators. Code generation options av
 4. Generate Go plain code.
 
    ```sh
-   go-capnproto -source model.capnp
+   caps -source model.capnp
    ```
 
 # Annotations

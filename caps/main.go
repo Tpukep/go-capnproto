@@ -3,6 +3,7 @@ package main
 import (
 	"flag"
 	"fmt"
+	"go/build"
 	"io"
 	"io/ioutil"
 	"log"
@@ -20,11 +21,14 @@ var (
 	source       = flag.String("source", "", "specify output directory")
 	verbose      = flag.Bool("verbose", false, "verbose mode")
 	structTypeRe = regexp.MustCompile("struct ([[:alpha:]]+)")
+	capnpRe      = regexp.MustCompile("(?m)[\r\n]+^.*" + regexp.QuoteMeta(CAPNP_CODEC_ANT) + ".*$")
+	msgpRe       = regexp.MustCompile("(?m)[\r\n]+^.*" + regexp.QuoteMeta(MSGP_CODEC_ANT) + ".*$")
 )
 
 const (
 	CAPNP_CODEC_ANT = "$Codec.capnp;"
 	MSGP_CODEC_ANT  = "$Codec.msgp;"
+	SELF_PKG_NAME   = "github.com/tpukep/caps"
 )
 
 func use() {
@@ -49,10 +53,13 @@ func main() {
 	}
 
 	source := *source
-	gopath := os.Getenv("GOPATH")
+	pkg, err := build.Import(SELF_PKG_NAME, "./", build.FindOnly)
+	if err != nil {
+		log.Fatalln("Failed to detect self package location:", err)
+	}
 
-	capsSchemaPath := fmt.Sprintf("-I%s/src/github.com/tpukep/go-capnproto", gopath)
-	goSchemaPath := fmt.Sprintf("-I%s/src/github.com/tpukep/go-capnproto/vendor/github.com/glycerine/go-capnproto", gopath)
+	capsSchemaPath := fmt.Sprintf("-I%s", pkg.Dir)
+	goSchemaPath := fmt.Sprintf("-I%s/vendor/github.com/glycerine/go-capnproto", pkg.Dir)
 
 	capnpArgs := []string{capsSchemaPath, goSchemaPath, "compile", "-opgo"}
 
@@ -63,13 +70,10 @@ func main() {
 
 	sourceContent := string(sourceData)
 	// Remove comments
-	re := regexp.MustCompile("(?m)[\r\n]+^.*#.*$")
-	cleanContent := re.ReplaceAllString(sourceContent, "")
+	re := regexp.MustCompile("(?s)#.*?\n")
+	cleanContent := re.ReplaceAllString(sourceContent, "\n")
 
 	// Find codec annotations
-	capnpRe := regexp.MustCompile("(?m)[\r\n]+^.*" + regexp.QuoteMeta(CAPNP_CODEC_ANT) + ".*$")
-	msgpRe := regexp.MustCompile("(?m)[\r\n]+^.*" + regexp.QuoteMeta(MSGP_CODEC_ANT) + ".*$")
-
 	capnpGen := capnpRe.MatchString(cleanContent)
 	msgpGen := msgpRe.MatchString(cleanContent)
 
@@ -94,6 +98,7 @@ func main() {
 	// Generate plain Go code
 	cmd := exec.Command("capnp", capnpArgs...)
 	cmd.Stderr = os.Stderr
+	cmd.Stdout = os.Stdout
 
 	if *verbose {
 		fmt.Printf("Executing: %q\n", strings.Join(cmd.Args, " "))
@@ -137,6 +142,7 @@ func main() {
 		cmd.Stderr = os.Stderr
 
 		if *verbose {
+			cmd.Stdout = os.Stdout
 			fmt.Printf("Executing: %q\n", strings.Join(cmd.Args, " "))
 		}
 
