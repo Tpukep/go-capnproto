@@ -72,24 +72,46 @@ You need Go 1.5 version. Set environment variable: `GO15VENDOREXPERIMENT=1`.
 
 ## Checks
 
+### Number checks
+   
    ```capnp
-   using Check = import "/check.capnp";
+   # $Check.multof(Num :UInt32); # Multiple of Num
+   # $Check.min(Num :UInt64);    # Great than Num
+   # $Check.max(Num :UInt64);    # Less than Num
+   ```
 
-   # Number checks
-   $Check.multof(Num :UInt32); # Multiple of Num
-   $Check.min(Num :UInt64);    # Great than Num
-   $Check.max(Num :UInt64);    # Less than Num
+### Text check
+   
+   ```capnp
+   $Check.format(FormatType :Text);
+   # Predefined format. Available: 
+   # "date-time": Date representation, as defined by RFC 3339
+   # "email": Internet email address, see RFC 5322
+   # "hostname": Internet host name, see RFC 1034
+   # "ipv4": IPv4 address, according to dotted-quad ABNF syntax as defined in RFC 2673
+   # "ipv6": IPv6 address, as defined in RFC 2373
+   # "uri": A universal resource identifier (URI), according to RFC3986.
+   
+   $Check.pattern(Regexp :Text);     # Regular expression
+   ```
 
-   # Text check
-   $Check.format(FORMAT_TYPE); # Predefined format
-   $Check.pattern(REGEXP);     # Regular expression
-
-   # List check
+### List check
+   
+   ```capnp
    $Check.unique;              # All List elements must be unique
+   ```
 
-   # Text & List check
+### Text & List check
+   
+   ```capnp
    $Check.minlen(Len :UInt32); # Minimum length
    $Check.maxlen(Len :UInt32); # Maximum length
+   ```
+
+### Example of various checks
+  
+   ```capnp
+   using Check = import "/check.capnp";
 
    struct Person {
       name      @0 :Text  $Check.maxlen(256) $Check.minlen(2);
