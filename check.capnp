@@ -2,6 +2,6 @@
 
 using Go = import "/go.capnp";
 
-$Go.package("check");
+$Go.package("caps");
 
 annotation value(field) :Text; #To use go-playground/validator expressions

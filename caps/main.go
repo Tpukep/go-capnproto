@@ -59,7 +59,7 @@ func main() {
 		os.Exit(1)
 	}
 
-	capsSchemaPath := fmt.Sprintf("-I%s", pkg.Dir)
+	capsSchemaPath := fmt.Sprintf("-I%s/..", pkg.Dir)
 	goSchemaPath := fmt.Sprintf("-I%s/vendor/github.com/glycerine/go-capnproto", pkg.Dir)
 
 	capnpArgs := []string{capsSchemaPath, goSchemaPath, "compile", "-opgo"}

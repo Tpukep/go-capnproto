@@ -15,9 +15,6 @@ import (
 	C "github.com/glycerine/go-capnproto"
 	"github.com/tpukep/bambam/bam"
 	"github.com/tpukep/caps"
-	"github.com/tpukep/caps/annotations/check"
-	"github.com/tpukep/caps/annotations/codec"
-	"github.com/tpukep/caps/annotations/field"
 )
 
 var g_nodes = make(map[uint64]*node)
@@ -869,9 +866,9 @@ func (n *node) processAnnotations(w io.Writer, f caps.Field, t caps.Type_Which, 
 		annotations[a.Id()] = a
 	}
 
-	req, required := annotations[field.Required]
-	opt, optional := annotations[field.Optional]
-	_, ignored := annotations[field.Ignored]
+	req, required := annotations[caps.FieldRequired]
+	opt, optional := annotations[caps.FieldOptional]
+	_, ignored := annotations[caps.FieldIgnored]
 
 	assert(!(required && ignored), "Field annnotations 'required' and 'ignored' are incompatible.")
 	assert(!(required && optional), "Annnotations 'required' and 'optional' are incompatible")
@@ -882,43 +879,43 @@ func (n *node) processAnnotations(w io.Writer, f caps.Field, t caps.Type_Which, 
 
 	// Codecs Tags
 	if ignored {
-		if _, found := n.codecs[codec.Json]; found {
+		if _, found := n.codecs[caps.CodecJson]; found {
 			tags = append(tags, fmt.Sprintf("json:\"-\""))
 		}
-		if _, found := n.codecs[codec.Msgp]; found {
+		if _, found := n.codecs[caps.CodecMsgp]; found {
 			tags = append(tags, fmt.Sprintf("msg:\"-\""))
 		}
 
 		checkTags = append(checkTags, "-")
 	} else if optional {
-		if _, found := n.codecs[codec.Json]; found {
+		if _, found := n.codecs[caps.CodecJson]; found {
 			tags = append(tags, fmt.Sprintf("json:\"%s,omitempty\"", opt.Value().Text()))
 		}
-		if _, found := n.codecs[codec.Msgp]; found {
+		if _, found := n.codecs[caps.CodecMsgp]; found {
 			tags = append(tags, fmt.Sprintf("msg:\"%s\"", opt.Value().Text()))
 		}
 
 		checkTags = append(checkTags, "omitempty")
 	} else if required {
-		if _, found := n.codecs[codec.Json]; found {
+		if _, found := n.codecs[caps.CodecJson]; found {
 			tags = append(tags, fmt.Sprintf("json:\"%s\"", req.Value().Text()))
 		}
-		if _, found := n.codecs[codec.Msgp]; found {
+		if _, found := n.codecs[caps.CodecMsgp]; found {
 			tags = append(tags, fmt.Sprintf("msg:\"%s\"", req.Value().Text()))
 		}
 
 		checkTags = append(checkTags, "required")
 	} else {
-		if _, found := n.codecs[codec.Json]; found {
+		if _, found := n.codecs[caps.CodecJson]; found {
 			tags = append(tags, fmt.Sprintf("json:\"%s\"", f.Name()))
 		}
-		if _, found := n.codecs[codec.Msgp]; found {
+		if _, found := n.codecs[caps.CodecMsgp]; found {
 			tags = append(tags, fmt.Sprintf("msg:\"%s\"", f.Name()))
 		}
 	}
 
 	// Check annotation
-	if exp, found := annotations[check.Value]; found {
+	if exp, found := annotations[caps.CheckValue]; found {
 		checkTags = append(checkTags, exp.Value().Text())
 	}
 
@@ -960,14 +957,14 @@ func main() {
 				}
 			} else {
 				switch a.Id() {
-				case codec.Capnp:
-					enableCodec(f, codec.Capnp)
+				case caps.CodecCapnp:
+					enableCodec(f, caps.CodecCapnp)
 					g_imported["io"] = true
 					g_imported[GO_CAPNP_IMPORT] = true
-				case codec.Json:
-					enableCodec(f, codec.Json)
-				case codec.Msgp:
-					enableCodec(f, codec.Msgp)
+				case caps.CodecJson:
+					enableCodec(f, caps.CodecJson)
+				case caps.CodecMsgp:
+					enableCodec(f, caps.CodecMsgp)
 				}
 			}
 		}
@@ -1005,7 +1002,7 @@ func main() {
 		}
 
 		// Write translation functions
-		if _, found := f.codecs[codec.Capnp]; found {
+		if _, found := f.codecs[caps.CodecCapnp]; found {
 			_, err = x.WriteToTranslators(&buf)
 			assert(err == nil, "%v\n", err)
 		}

@@ -5,7 +5,7 @@ It integrates MsgPack and Capn'proto code generators. Code generation options av
 
 You need Go 1.5 version. Set environment variable: `GO15VENDOREXPERIMENT=1`.
 
-1. Install `capnp` tool. [Instructions](https://capnproto.org/install.html)
+1. Install `capnp` tool. See [Instructions](https://capnproto.org/install.html)
 
 2. Install `caps`
    
@@ -39,7 +39,7 @@ You need Go 1.5 version. Set environment variable: `GO15VENDOREXPERIMENT=1`.
 ## Codecs
 
    ```capnp
-   using Codec = import "/codec.capnp";
+   using Codec = import "/caps/codec.capnp";
 
    # By default only plain Go code will be generated
    # These annotations are enable extra features
@@ -59,7 +59,7 @@ You need Go 1.5 version. Set environment variable: `GO15VENDOREXPERIMENT=1`.
 ## Fields
 
    ```capnp
-   using Field = import "/field.capnp";
+   using Field = import "/caps/field.capnp";
    
    struct Person {
       firstName  @0 :Text $Field.required("name"); # Rename field to use more
@@ -72,53 +72,18 @@ You need Go 1.5 version. Set environment variable: `GO15VENDOREXPERIMENT=1`.
 
 ## Checks
 
-### Number checks
-   
-   ```capnp
-   # $Check.multof(Num :UInt32); # Multiple of Num
-   # $Check.min(Num :UInt64);    # Great than Num
-   # $Check.max(Num :UInt64);    # Less than Num
-   ```
-
-### Text check
-   
-   ```capnp
-   $Check.format(FormatType :Text);
-   # Predefined format. Available: 
-   # "date-time": Date representation, as defined by RFC 3339
-   # "email": Internet email address, see RFC 5322
-   # "hostname": Internet host name, see RFC 1034
-   # "ipv4": IPv4 address, according to dotted-quad ABNF syntax as defined in RFC 2673
-   # "ipv6": IPv6 address, as defined in RFC 2373
-   # "uri": A universal resource identifier (URI), according to RFC3986.
-   
-   $Check.pattern(Regexp :Text);     # Regular expression
-   ```
-
-### List check
-   
-   ```capnp
-   $Check.unique;              # All List elements must be unique
-   ```
-
-### Text & List check
-   
-   ```capnp
-   $Check.minlen(Len :UInt32); # Minimum length
-   $Check.maxlen(Len :UInt32); # Maximum length
-   ```
+You can use [Go-playground Validator](https://github.com/go-playground/validator) expressions to generate tags in plain Go code. Note that `$Field` tags also generate corresponding `validate` tags.
 
 ### Example of various checks
   
    ```capnp
-   using Check = import "/check.capnp";
+   using Check = import "/caps/check.capnp";
 
-   struct Person {
-      name      @0 :Text  $Check.maxlen(256) $Check.minlen(2);
-      email     @1 :Text  $Check.format("email");
-      age       @2 :UInt8 $Check.max(40);
-      phone     @3 :Text  $Check.pattern("\\d+");
-      addresses @4 :List(Text) $Check.unique;
+   struct Person $Go.doc("Some Person") {
+      name  @0 :Text  $Check.value("max=256,min=2");
+      email @1 :Text  $Check.value("email");
+      age   @2 :UInt8 $Check.value("max=40");
+      phone @3 :Text;
    }
    ```
 

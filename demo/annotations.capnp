@@ -1,9 +1,9 @@
 @0xeac197c12d74cbbb;
 
 using Go = import "/go.capnp";
-using Codec = import "../annotations/codec/codec.capnp";
-using Check = import "../annotations/check/check.capnp";
-using Field = import "../annotations/field/field.capnp";
+using Codec = import "../codec.capnp";
+using Check = import "../check.capnp";
+using Field = import "../field.capnp";
 
 $Go.package("demo");
 
