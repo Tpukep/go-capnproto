@@ -19,10 +19,10 @@
 # OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 # THE SOFTWARE.
 
-using Go = import "../go.capnp";
+using Go = import "/go.capnp";
 
 @0xa93fc509624c72d9;
-$Go.package("main");
+$Go.package("caps");
 $Go.import("github.com/glycerine/go-capnproto/capnpc-go");
 
 using Id = UInt64;
