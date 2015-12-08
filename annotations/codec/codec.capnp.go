@@ -1,4 +1,4 @@
-package caps
+package codec
 
 const Msgp = uint64(0xdd7630a67673d856)
 const Json = uint64(0xd44ac70dbe18c0dc)
