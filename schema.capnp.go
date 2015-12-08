@@ -1,4 +1,4 @@
-package main
+package caps
 
 // AUTO GENERATED - DO NOT EDIT
 

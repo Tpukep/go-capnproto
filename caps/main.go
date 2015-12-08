@@ -4,9 +4,7 @@ import (
 	"flag"
 	"fmt"
 	"go/build"
-	"io"
 	"io/ioutil"
-	"log"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -53,9 +51,12 @@ func main() {
 	}
 
 	source := *source
+	sourceName := strings.TrimSuffix(source, ".capnp")
+
 	pkg, err := build.Import(SELF_PKG_NAME, "./", build.FindOnly)
 	if err != nil {
-		log.Fatalln("Failed to detect self package location:", err)
+		fmt.Println("Failed to detect self package location:", err)
+		os.Exit(1)
 	}
 
 	capsSchemaPath := fmt.Sprintf("-I%s", pkg.Dir)
@@ -65,7 +66,8 @@ func main() {
 
 	sourceData, err := ioutil.ReadFile(source)
 	if err != nil {
-		log.Fatalln("Failed to read schema file:", err)
+		fmt.Println("Failed to read schema file:", err)
+		os.Exit(1)
 	}
 
 	sourceContent := string(sourceData)
@@ -85,7 +87,8 @@ func main() {
 		if !bam.DirExists(*outdir) {
 			err := os.MkdirAll(*outdir, 0755)
 			if err != nil {
-				log.Fatalln("Failed to create output dir:", err)
+				fmt.Println("Failed to create output dir:", err)
+				os.Exit(1)
 			}
 		}
 
@@ -106,38 +109,40 @@ func main() {
 
 	err = cmd.Run()
 	if err != nil {
-		log.Fatalln("Failed to run Plain go code generator:", err)
+		fmt.Println("Failed to run Plain go code generator:", err)
+		os.Exit(1)
 	}
 
 	if capnpGen {
-		// Add suffix "Capn" to Capn'proto structs
-		outFilename := filepath.Join(*outdir, source[:strings.LastIndex(source, ".")]+".capnp.go")
+		// Add suffix "Capn" to Capn'proto types
+		outFilename := filepath.Join(*outdir, sourceName+".capnp.go")
 
 		data, err := ioutil.ReadFile(outFilename)
 		if err != nil {
-			log.Fatalln("Failed to read Capn'proto out file:", err)
+			fmt.Println("Failed to read Capn'proto out file:", outFilename, "Error:", err)
+			os.Exit(1)
 		}
 
 		content := string(data)
 		matches := structTypeRe.FindAllStringSubmatch(sourceContent, -1)
 		for _, match := range matches {
-			structType := match[1]
-			if structType != "" {
-				content = strings.Replace(content, structType, structType+"Capn", -1)
+			typeName := match[1]
+			if typeName != "" {
+				content = strings.Replace(content, typeName, typeName+"Capn", -1)
 			}
 		}
 
 		err = ioutil.WriteFile(outFilename, []byte(content), 0644)
 		if err != nil {
-			log.Fatalln("Failed to run write replaced Capn'proto code file:", err)
+			fmt.Println("Failed to run write replaced Capn'proto code file:", err)
+			os.Exit(1)
 		}
 	}
 
 	// Generate Msgp code
 	if msgpGen {
-		baseFilename := filepath.Base(source)
-		inFilename := filepath.Join(*outdir, source[:strings.LastIndex(source, ".")]+".go")
-		outFilename := filepath.Join(*outdir, baseFilename[:strings.LastIndex(baseFilename, ".")]+".msgp.go")
+		inFilename := filepath.Join(*outdir, sourceName+".go")
+		outFilename := filepath.Join(*outdir, sourceName+".msgp.go")
 		cmd = exec.Command("msgp", "-o="+outFilename, "-tests=false", "-file="+inFilename)
 		cmd.Stderr = os.Stderr
 
@@ -148,28 +153,8 @@ func main() {
 
 		err = cmd.Run()
 		if err != nil {
-			log.Fatalln("Failed to run Msgp go code generator:", err)
+			fmt.Println("Failed to run Msgp go code generator:", err)
+			os.Exit(1)
 		}
 	}
-}
-
-func copy(src, dst string) error {
-	in, err := os.Open(src)
-	if err != nil {
-		return err
-	}
-	defer in.Close()
-
-	out, err := os.Create(dst)
-	if err != nil {
-		return err
-	}
-	defer out.Close()
-
-	_, err = io.Copy(out, in)
-	if err != nil {
-		return err
-	}
-
-	return nil
 }
