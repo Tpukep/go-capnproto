@@ -82,6 +82,8 @@ func (n *node) resolveName(base, name string, file *node) {
 		n.name = title(name)
 	}
 
+	n.name += "Capn"
+
 	n.pkg = file.pkg
 	n.imp = file.imp
 

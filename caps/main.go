@@ -15,12 +15,11 @@ import (
 )
 
 var (
-	outdir       = flag.String("o", ".", "specify output directory")
-	source       = flag.String("source", "", "specify output directory")
-	verbose      = flag.Bool("verbose", false, "verbose mode")
-	structTypeRe = regexp.MustCompile("struct ([[:alpha:]]+)")
-	capnpRe      = regexp.MustCompile("(?m)[\r\n]+^.*" + regexp.QuoteMeta(CAPNP_CODEC_ANT) + ".*$")
-	msgpRe       = regexp.MustCompile("(?m)[\r\n]+^.*" + regexp.QuoteMeta(MSGP_CODEC_ANT) + ".*$")
+	outdir  = flag.String("o", ".", "specify output directory")
+	source  = flag.String("source", "", "specify output directory")
+	verbose = flag.Bool("verbose", false, "verbose mode")
+	capnpRe = regexp.MustCompile("(?m)[\r\n]+^.*" + regexp.QuoteMeta(CAPNP_CODEC_ANT) + ".*$")
+	msgpRe  = regexp.MustCompile("(?m)[\r\n]+^.*" + regexp.QuoteMeta(MSGP_CODEC_ANT) + ".*$")
 )
 
 const (
@@ -111,32 +110,6 @@ func main() {
 	if err != nil {
 		fmt.Println("Failed to run Plain go code generator:", err)
 		os.Exit(1)
-	}
-
-	if capnpGen {
-		// Add suffix "Capn" to Capn'proto types
-		outFilename := filepath.Join(*outdir, sourceName+".capnp.go")
-
-		data, err := ioutil.ReadFile(outFilename)
-		if err != nil {
-			fmt.Println("Failed to read Capn'proto out file:", outFilename, "Error:", err)
-			os.Exit(1)
-		}
-
-		content := string(data)
-		matches := structTypeRe.FindAllStringSubmatch(sourceContent, -1)
-		for _, match := range matches {
-			typeName := match[1]
-			if typeName != "" {
-				content = strings.Replace(content, typeName, typeName+"Capn", -1)
-			}
-		}
-
-		err = ioutil.WriteFile(outFilename, []byte(content), 0644)
-		if err != nil {
-			fmt.Println("Failed to run write replaced Capn'proto code file:", err)
-			os.Exit(1)
-		}
 	}
 
 	// Generate Msgp code
