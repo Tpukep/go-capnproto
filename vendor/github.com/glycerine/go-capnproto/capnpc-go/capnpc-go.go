@@ -82,7 +82,9 @@ func (n *node) resolveName(base, name string, file *node) {
 		n.name = title(name)
 	}
 
-	n.name += "Capn"
+	if n.Which() != NODE_ENUM {
+		n.name += "Capn"
+	}
 
 	n.pkg = file.pkg
 	n.imp = file.imp
@@ -134,63 +136,7 @@ func (e *enumval) fullName() string {
 }
 
 func (n *node) defineEnum(w io.Writer) {
-	for _, a := range n.Annotations().ToArray() {
-		if a.Id() == C.Doc {
-			fprintf(w, "// %s\n", a.Value().Text())
-		}
-	}
-	fprintf(w, "type %s uint16\n", n.name)
-
-	if es := n.Enum().Enumerants(); es.Len() > 0 {
-		fprintf(w, "const (\n")
-
-		ev := make([]enumval, es.Len())
-		for i := 0; i < es.Len(); i++ {
-			e := es.At(i)
-			ename := e.Name()
-			if an := nameAnnotation(e.Annotations()); an != "" {
-				ename = an
-			}
-
-			t := ename
-			for _, an := range e.Annotations().ToArray() {
-				if an.Id() == C.Tag {
-					t = an.Value().Text()
-				} else if an.Id() == C.Notag {
-					t = ""
-				}
-			}
-			ev[e.CodeOrder()] = enumval{e, i, ename, t, n}
-		}
-
-		// not an iota, so type has to go on each line
-		for _, e := range ev {
-			fprintf(w, "%s %s = %d\n", e.fullName(), n.name, e.val)
-		}
-
-		fprintf(w, ")\n")
-
-		fprintf(w, "func (c %s) String() string {\n", n.name)
-		fprintf(w, "switch c {\n")
-		for _, e := range ev {
-			if e.tag != "" {
-				fprintf(w, "case %s: return \"%s\"\n", e.fullName(), e.tag)
-			}
-		}
-		fprintf(w, "default: return \"\"\n")
-		fprintf(w, "}\n}\n\n")
-
-		fprintf(w, "func %sFromString(c string) %s {\n", n.name, n.name)
-		fprintf(w, "switch c {\n")
-		for _, e := range ev {
-			if e.tag != "" {
-				fprintf(w, "case \"%s\": return %s\n", e.tag, e.fullName())
-			}
-		}
-		fprintf(w, "default: return 0\n")
-		fprintf(w, "}\n}\n")
-	}
-
+	// Enum type is defined in plain Go code
 	fprintf(w, "type %s_List C.PointerList\n", n.name)
 	fprintf(w, "func New%sList(s *C.Segment, sz int) %s_List { return %s_List(s.NewUInt16List(sz)) }\n", n.name, n.name, n.name)
 	fprintf(w, "func (s %s_List) Len() int { return C.UInt16List(s).Len() }\n", n.name)

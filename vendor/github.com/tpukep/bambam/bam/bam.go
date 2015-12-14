@@ -273,14 +273,14 @@ func (x *Extractor) SettersToGo(goName string) string {
 		} else {
 
 			var isCapType bool = false
-			if _, ok := x.goType2capTypeCache[f.goTypeSeq[0]]; !ok {
+			if _, found := x.goType2capTypeCache[f.goTypeSeq[0]]; found {
+				isCapType = true
+			} else {
 				if len(f.goTypeSeq) > 1 {
-					if _, ok := x.goType2capTypeCache[f.goTypeSeq[1]]; ok {
+					if _, found := x.goType2capTypeCache[f.goTypeSeq[1]]; found {
 						isCapType = true
 					}
 				}
-			} else {
-				isCapType = true
 			}
 
 			if isCapType {
@@ -318,7 +318,7 @@ func (x *Extractor) SettersToGoListHelper(buf io.Writer, myStruct *Struct, f *Fi
 		fmt.Fprintf(buf, "  dest.%s = src.%s().ToArray()\n", f.goName, f.goCapGoName)
 		return
 	}
-	if !myStruct.firstNonTextListSeen {
+	if !myStruct.firstNonTextListSeen && f.canonGoType != "SliceByte" {
 		fmt.Fprintf(buf, "\n  var n int\n")
 		myStruct.firstNonTextListSeen = true
 	}
@@ -328,7 +328,16 @@ func (x *Extractor) SettersToGoListHelper(buf io.Writer, myStruct *Struct, f *Fi
 		addStar = ""
 	}
 
-	fmt.Fprintf(buf, `
+	if f.canonGoType == "SliceByte" {
+		tmpl := `
+    // %s
+		dest.%s = make([]byte, len(src.%s()))
+	copy(dest.%s, src.%s())
+
+`
+		fmt.Fprintf(buf, tmpl, f.goName, f.goName, f.goCapGoName, f.goName, f.goCapGoName)
+	} else {
+		tmpl := `
     // %s
 	n = src.%s().Len()
 	dest.%s = make(%s%s, n)
@@ -336,8 +345,9 @@ func (x *Extractor) SettersToGoListHelper(buf io.Writer, myStruct *Struct, f *Fi
         dest.%s[i] = %s
     }
 
-`, f.goName, f.goCapGoName, f.goName, f.goTypePrefix, f.goType, f.goName, x.ElemStarCapToGo(addStar, f))
-
+`
+		fmt.Fprintf(buf, tmpl, f.goName, f.goCapGoName, f.goName, f.goTypePrefix, f.goType, f.goName, x.ElemStarCapToGo(addStar, f))
+	}
 }
 
 func (x *Extractor) ElemStarCapToGo(addStar string, f *Field) string {
@@ -428,14 +438,20 @@ func (x *Extractor) SettersToCapn(goName string) string {
 
 				} else {
 					VPrintf("\n\n  at non-List(List()), yes intrinsic list in SettersToCap(): f = %#v\n", f)
-					fmt.Fprintf(&buf, `
+
+					if f.canonGoType == "SliceByte" {
+						fmt.Fprintf(&buf, "dest.Set%s(src.%s)", f.goCapGoName, f.goName)
+					} else {
+						tmpl := `
 
   mylist%d := seg.New%sList(len(src.%s))
   for i := range src.%s {
      mylist%d.Set(i, %s(src.%s[i]))
   }
   dest.Set%s(mylist%d)
-`, t.listNum, last(f.capTypeSeq), f.goName, f.goName, t.listNum, last(f.goCapGoTypeSeq), f.goName, f.goCapGoName, t.listNum)
+`
+						fmt.Fprintf(&buf, tmpl, t.listNum, last(f.capTypeSeq), f.goName, f.goName, t.listNum, last(f.goCapGoTypeSeq), f.goName, f.goCapGoName, t.listNum)
+					}
 				}
 			} else {
 				// handle list of struct
@@ -972,6 +988,7 @@ func IsSlice(tnas string) bool {
 }
 
 func (x *Extractor) NoteTypedef(goNewTypeName string, goTargetTypeName string) {
+	fmt.Println("Note", goNewTypeName)
 	// we just want to preserve the mapping, without adding Capn suffix
 	//VPrintf("\n\n noting typedef: goNewTypeName: '%s', goTargetTypeName: '%s'\n", goNewTypeName, goTargetTypeName)
 	var capTypeSeq []string
@@ -1320,11 +1337,13 @@ func (x *Extractor) g2c(goFieldTypeName string) string {
 	if alreadyKnownCapnType != "" {
 		VPrintf("\n\n debug: x.goType2capTypeCache[goFieldTypeName='%s'] -> '%s'\n", goFieldTypeName, alreadyKnownCapnType)
 		capnTypeDisplayed = alreadyKnownCapnType
-	} else {
-		capnTypeDisplayed = GoType2CapnType(goFieldTypeName)
-		VPrintf("\n\n 999 debug: adding to  x.goType2capTypeCache[goFieldTypeName='%s'] = '%s'\n", goFieldTypeName, capnTypeDisplayed)
-		x.goType2capTypeCache[goFieldTypeName] = capnTypeDisplayed
 	}
+	// else {
+	// 	capnTypeDisplayed = GoType2CapnType(goFieldTypeName)
+	// 	fmt.Println("NOt Already", goFieldTypeName)
+	// 	VPrintf("\n\n 999 debug: adding to  x.goType2capTypeCache[goFieldTypeName='%s'] = '%s'\n", goFieldTypeName, capnTypeDisplayed)
+	// 	x.goType2capTypeCache[goFieldTypeName] = capnTypeDisplayed
+	// }
 
 	return capnTypeDisplayed
 }
