@@ -16,16 +16,18 @@ import (
 
 var (
 	outdir  = flag.String("o", ".", "specify output directory")
-	source  = flag.String("source", "", "specify output directory")
+	source  = flag.String("source", "", "specify input schema file")
 	verbose = flag.Bool("verbose", false, "verbose mode")
-	capnpRe = regexp.MustCompile("(?m)[\r\n]+^.*" + regexp.QuoteMeta(CAPNP_CODEC_ANT) + ".*$")
-	msgpRe  = regexp.MustCompile("(?m)[\r\n]+^.*" + regexp.QuoteMeta(MSGP_CODEC_ANT) + ".*$")
+	capnpRe = regexp.MustCompile("(?m)[\r\n]+^.*" + regexp.QuoteMeta(CAPNP_CODEC_SHORT) + "|" + regexp.QuoteMeta(CAPNP_CODEC) + ".*$")
+	msgpRe  = regexp.MustCompile("(?m)[\r\n]+^.*" + regexp.QuoteMeta(MSGP_CODEC_SHORT) + "|" + regexp.QuoteMeta(MSGP_CODEC) + ".*$")
 )
 
 const (
-	CAPNP_CODEC_ANT = "$Codec.capnp;"
-	MSGP_CODEC_ANT  = "$Codec.msgp;"
-	SELF_PKG_NAME   = "github.com/tpukep/caps"
+	CAPNP_CODEC_SHORT = "$Codec.capnp;"
+	CAPNP_CODEC       = `$import "/caps/codec.capnp".capnp(void);`
+	MSGP_CODEC_SHORT  = "$Codec.msgp;"
+	MSGP_CODEC        = `$import "/caps/codec.capnp".msgp(void);`
+	SELF_PKG_NAME     = "github.com/tpukep/caps"
 )
 
 func use() {

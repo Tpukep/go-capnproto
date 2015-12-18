@@ -129,13 +129,14 @@ func (e *enumval) fullName() string {
 	return fmt.Sprintf("%s_%s", strings.ToUpper(e.parent.name), strings.ToUpper(e.name))
 }
 
-func (n *node) defineEnum(w io.Writer) {
+func (n *node) defineEnum(w io.Writer, x *bam.Extractor) {
 	for _, a := range n.Annotations().ToArray() {
 		if a.Id() == C.Doc {
 			fmt.Fprintf(w, "// %s\n", a.Value().Text())
 		}
 	}
 	fmt.Fprintf(w, "type %s uint16\n", n.name)
+	x.NewEnum(n.name)
 
 	if es := n.Enum().Enumerants(); es.Len() > 0 {
 		fmt.Fprintf(w, "const (\n")
@@ -992,11 +993,11 @@ func main() {
 			case caps.NODE_ANNOTATION:
 				n.defineAnnotation(&buf)
 			case caps.NODE_ENUM:
-				n.defineEnum(&buf)
+				n.defineEnum(&buf, x)
 			case caps.NODE_STRUCT:
 				if !n.Struct().IsGroup() {
 					n.defineStructTypes(&buf, nil, x)
-					n.defineStructEnums(&buf)
+					// n.defineStructEnums(&buf)
 				}
 			}
 		}

@@ -35,6 +35,7 @@ type Extractor struct {
 
 	// key is goName
 	srs        map[string]*Struct
+	enums      []string
 	ToGoCode   map[string][]byte
 	ToCapnCode map[string][]byte
 	SaveCode   map[string][]byte
@@ -271,19 +272,7 @@ func (x *Extractor) SettersToGo(goName string) string {
 		if n >= 2 && f.goTypeSeq[0] == "[]" {
 			x.SettersToGoListHelper(&buf, myStruct, f)
 		} else {
-
-			var isCapType bool = false
-			if _, found := x.goType2capTypeCache[f.goTypeSeq[0]]; found {
-				isCapType = true
-			} else {
-				if len(f.goTypeSeq) > 1 {
-					if _, found := x.goType2capTypeCache[f.goTypeSeq[1]]; found {
-						isCapType = true
-					}
-				}
-			}
-
-			if isCapType {
+			if x.isCapType(f.goTypeSeq) {
 				if f.goTypeSeq[0] == "*" {
 					fmt.Fprintf(&buf, "  dest.%s = %sCapnToGo(src.%s(), nil)\n",
 						f.goName, f.goType, f.goCapGoName)
@@ -306,6 +295,22 @@ func (x *Extractor) SettersToGo(goName string) string {
 		i++
 	}
 	return string(buf.Bytes())
+}
+
+func (x *Extractor) isCapType(typeseq []string) bool {
+	var name string
+
+	if len(typeseq) > 1 {
+		name = typeseq[1]
+	} else {
+		name = typeseq[0]
+	}
+
+	if _, found := x.goType2capTypeCache[name]; found && !x.isEnumType(name) {
+		return true
+	} else {
+		return false
+	}
 }
 
 func (x *Extractor) SettersToGoListHelper(buf io.Writer, myStruct *Struct, f *Field) {
@@ -440,7 +445,7 @@ func (x *Extractor) SettersToCapn(goName string) string {
 					VPrintf("\n\n  at non-List(List()), yes intrinsic list in SettersToCap(): f = %#v\n", f)
 
 					if f.canonGoType == "SliceByte" {
-						fmt.Fprintf(&buf, "dest.Set%s(src.%s)", f.goCapGoName, f.goName)
+						fmt.Fprintf(&buf, "dest.Set%s(src.%s)\n", f.goCapGoName, f.goName)
 					} else {
 						tmpl := `
 
@@ -493,19 +498,7 @@ func (x *Extractor) SettersToCapn(goName string) string {
 			} // end switch f.goType
 
 		} else {
-
-			var isCapType bool = false
-			if _, ok := x.goType2capTypeCache[f.goTypeSeq[0]]; !ok {
-				if len(f.goTypeSeq) > 1 {
-					if _, ok := x.goType2capTypeCache[f.goTypeSeq[1]]; ok {
-						isCapType = true
-					}
-				}
-			} else {
-				isCapType = true
-			}
-
-			if isCapType {
+			if x.isCapType(f.goTypeSeq) {
 				if f.goTypeSeq[0] == "*" {
 					fmt.Fprintf(&buf, "  dest.Set%s(%sGoToCapn(seg, src.%s))\n",
 						f.goName, f.goType, f.goName)
@@ -988,7 +981,6 @@ func IsSlice(tnas string) bool {
 }
 
 func (x *Extractor) NoteTypedef(goNewTypeName string, goTargetTypeName string) {
-	fmt.Println("Note", goNewTypeName)
 	// we just want to preserve the mapping, without adding Capn suffix
 	//VPrintf("\n\n noting typedef: goNewTypeName: '%s', goTargetTypeName: '%s'\n", goNewTypeName, goTargetTypeName)
 	var capTypeSeq []string
@@ -1076,6 +1068,10 @@ const NotList = false
 
 const NotEmbedded = false
 const YesEmbedded = true
+
+func (x *Extractor) NewEnum(typeName string) {
+	x.enums = append(x.enums, typeName)
+}
 
 func (x *Extractor) GenerateStructField(goFieldName string, goFieldTypePrefix string, goFieldTypeName string, astfld *ast.Field, isList bool, tag *ast.BasicLit, IsEmbedded bool, goTypeSeq []string) error {
 
@@ -1296,7 +1292,6 @@ func (x *Extractor) assembleCapType(capTypeSeq []string) string {
 }
 
 func (x *Extractor) g2c(goFieldTypeName string) string {
-
 	switch goFieldTypeName {
 	case "[]":
 		return "List"
@@ -1337,19 +1332,27 @@ func (x *Extractor) g2c(goFieldTypeName string) string {
 	if alreadyKnownCapnType != "" {
 		VPrintf("\n\n debug: x.goType2capTypeCache[goFieldTypeName='%s'] -> '%s'\n", goFieldTypeName, alreadyKnownCapnType)
 		capnTypeDisplayed = alreadyKnownCapnType
+	} else {
+		capnTypeDisplayed = GoType2CapnType(goFieldTypeName)
+		VPrintf("\n\n 999 debug: adding to  x.goType2capTypeCache[goFieldTypeName='%s'] = '%s'\n", goFieldTypeName, capnTypeDisplayed)
+		x.goType2capTypeCache[goFieldTypeName] = capnTypeDisplayed
 	}
-	// else {
-	// 	capnTypeDisplayed = GoType2CapnType(goFieldTypeName)
-	// 	fmt.Println("NOt Already", goFieldTypeName)
-	// 	VPrintf("\n\n 999 debug: adding to  x.goType2capTypeCache[goFieldTypeName='%s'] = '%s'\n", goFieldTypeName, capnTypeDisplayed)
-	// 	x.goType2capTypeCache[goFieldTypeName] = capnTypeDisplayed
-	// }
 
 	return capnTypeDisplayed
 }
 
 func (x *Extractor) GenerateEmbedded(typeName string) {
 	fmt.Fprintf(&x.out, "%s; ", typeName) // prod
+}
+
+func (e *Extractor) isEnumType(typeName string) bool {
+	for _, name := range e.enums {
+		if name == typeName {
+			return true
+		}
+	}
+
+	return false
 }
 
 func getNewCapnpId() string {
