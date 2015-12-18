@@ -440,7 +440,7 @@ func (x *Extractor) SettersToCapn(goName string) string {
 					VPrintf("\n\n  at non-List(List()), yes intrinsic list in SettersToCap(): f = %#v\n", f)
 
 					if f.canonGoType == "SliceByte" {
-						fmt.Fprintf(&buf, "dest.Set%s(src.%s)", f.goCapGoName, f.goName)
+						fmt.Fprintf(&buf, "dest.Set%s(src.%s)\n", f.goCapGoName, f.goName)
 					} else {
 						tmpl := `
 
