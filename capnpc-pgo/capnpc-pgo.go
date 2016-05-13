@@ -578,7 +578,7 @@ func (n *node) defineField(w io.Writer, f caps.Field, x *bam.Extractor) {
 
 	if f.DiscriminantValue() != 0xFFFF {
 		if t.Which() == caps.TYPE_VOID {
-			fmt.Fprintf(&s, "/* Not implemented */")
+			x.SetUnionStruct()
 			w.Write(s.Bytes())
 			return
 		}

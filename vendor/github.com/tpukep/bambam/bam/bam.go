@@ -40,6 +40,7 @@ type Extractor struct {
 	ToCapnCode map[string][]byte
 	SaveCode   map[string][]byte
 	LoadCode   map[string][]byte
+	CapnUnion  map[string][]byte
 
 	// key is CanonGoType(goTypeSeq)
 	SliceToListCode map[string][]byte
@@ -68,6 +69,7 @@ func NewExtractor() *Extractor {
 		ToCapnCode:      make(map[string][]byte),
 		SaveCode:        make(map[string][]byte),
 		LoadCode:        make(map[string][]byte),
+		CapnUnion:       make(map[string][]byte),
 		srs:             make(map[string]*Struct),
 		srcFiles:        make([]*SrcFile, 0),
 		SliceToListCode: make(map[string][]byte),
@@ -119,6 +121,7 @@ type Struct struct {
 	capIdMap             map[int]*Field
 	firstNonTextListSeen bool
 	listNum              int
+	union                bool
 }
 
 type SrcFile struct {
@@ -203,9 +206,41 @@ func NewStruct(capName, goName string) *Struct {
 }
 
 func (x *Extractor) GenerateTranslators() {
-
 	for _, s := range x.srs {
+		// Capn'proto union constructors
+		if s.union {
+			var code []byte
 
+			for _, f := range s.fld {
+				fmt.Printf("%#v\n", f)
+
+				var capnType string
+
+				if x.isEnumType(f.goType) && !f.isList {
+					capnType = f.goType
+				} else if f.isList {
+					capnType = f.singleCapListType
+				} else {
+					capnType = f.goCapGoType
+				}
+
+				code = append(code, []byte(fmt.Sprintf(`
+func New%s%s(v %s) %s {
+	seg := capn.NewBuffer(nil)
+	u := NewMessageCapn(seg)
+	u.Set%s(v)
+
+	return u
+}`, f.goCapGoName, s.goName, capnType, s.capName, f.goCapGoName))...)
+				code = append(code, byte('\n'))
+			}
+
+			x.CapnUnion[s.goName] = code
+
+			continue
+		}
+
+		// Save()
 		x.SaveCode[s.goName] = []byte(fmt.Sprintf(`
 func (s *%s) Save(w io.Writer) error {
   	seg := capn.NewBuffer(nil)
@@ -215,6 +250,7 @@ func (s *%s) Save(w io.Writer) error {
 }
  `, s.goName, s.goName))
 
+		// Load()
 		x.LoadCode[s.goName] = []byte(fmt.Sprintf(`
 func (s *%s) Load(r io.Reader) error {
   	capMsg, err := capn.ReadFromStream(r, nil)
@@ -228,6 +264,7 @@ func (s *%s) Load(r io.Reader) error {
 }
 `, s.goName, s.capName, s.capName))
 
+		// TypeCapnToType
 		x.ToGoCode[s.goName] = []byte(fmt.Sprintf(`
 func %sToGo(src %s, dest *%s) *%s {
   if dest == nil {
@@ -237,7 +274,7 @@ func %sToGo(src %s, dest *%s) *%s {
   return dest
 }
 `, s.capName, s.capName, s.goName, s.goName, s.goName, x.SettersToGo(s.goName)))
-
+		// TypeToTypeCapn
 		x.ToCapnCode[s.goName] = []byte(fmt.Sprintf(`
 func %sGoToCapn(seg *capn.Segment, src *%s) %s {
   dest := AutoNew%s(seg)
@@ -744,6 +781,18 @@ func (x *Extractor) WriteToTranslators(w io.Writer) (n int64, err error) {
 			return
 		}
 
+		m, err = fmt.Fprintf(w, "\n\n")
+		n += int64(m)
+		if err != nil {
+			return
+		}
+
+		m, err = w.Write(x.CapnUnion[s.goName])
+		n += int64(m)
+		if err != nil {
+			return
+		}
+
 	} // end second loop over structs for translating methods.
 
 	// print the helpers made from x.GenerateListHelpers(capListTypeSeq, goTypeSeq)
@@ -1032,6 +1081,11 @@ func (x *Extractor) StartStruct(goName string) error {
 
 	return nil
 }
+
+func (x *Extractor) SetUnionStruct() {
+	x.curStruct.union = true
+}
+
 func (x *Extractor) EndStruct() {
 	fmt.Fprintf(&x.out, "} %s", x.FieldSuffix)
 }
