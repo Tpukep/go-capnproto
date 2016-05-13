@@ -616,7 +616,7 @@ func (n *node) defineField(w io.Writer, f caps.Field, x *bam.Extractor) {
 		typePrefix = goseq[0]
 	}
 
-	x.GenerateStructField(fname, typePrefix, typeName, fld, t.Which() != caps.TYPE_LIST, fld.Tag, false, goseq)
+	x.GenerateStructField(fname, typePrefix, typeName, fld, t.Which() == caps.TYPE_LIST, fld.Tag, false, goseq)
 
 	ans := f.Annotations()
 	n.processAnnotations(&s, f, t.Which(), ans)
@@ -746,7 +746,7 @@ func GoTypeName(n *node, s caps.FieldSlot, customtype string) string {
 			return "[]byte"
 		case caps.TYPE_ENUM:
 			ni := findNode(lt.Enum().TypeId())
-			return fmt.Sprintf("%s", ni.remoteName(n))
+			return fmt.Sprintf("[]%s", ni.remoteName(n))
 		case caps.TYPE_STRUCT:
 			ni := findNode(lt.Struct().TypeId())
 

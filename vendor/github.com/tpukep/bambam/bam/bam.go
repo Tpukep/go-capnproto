@@ -212,8 +212,6 @@ func (x *Extractor) GenerateTranslators() {
 			var code []byte
 
 			for _, f := range s.fld {
-				fmt.Printf("%#v\n", f)
-
 				var capnType string
 
 				if x.isEnumType(f.goType) && !f.isList {
@@ -1235,9 +1233,7 @@ func (x *Extractor) GenerateStructField(goFieldName string, goFieldTypePrefix st
 	curField.capType = capnTypeDisplayed
 	curField.goName = goFieldName
 	curField.goType = goFieldTypeName
-	if len(curField.capTypeSeq) > 0 && curField.capTypeSeq[0] == "List" {
-		curField.isList = true
-	}
+	curField.isList = isList
 	curField.tagValue = tagValue
 	curField.goTypePrefix = goFieldTypePrefix
 
